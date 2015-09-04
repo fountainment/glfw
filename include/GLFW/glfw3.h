@@ -1622,12 +1622,19 @@ GLFWAPI void glfwWindowHint(int target, int hint);
  *  `NSHighResolutionCapable` key is enabled in the application bundle's
  *  `Info.plist`.  For more information, see
  *  [High Resolution Guidelines for OS X](https://developer.apple.com/library/mac/documentation/GraphicsAnimation/Conceptual/HighResolutionOSX/Explained/Explained.html)
- *  in the Mac Developer Library.
+ *  in the Mac Developer Library.  The GLFW test and example programs use
+ *  a custom `Info.plist` template for this, which can be found as
+ *  `CMake/MacOSXBundleInfo.plist.in` in the source tree.
  *
  *  @remarks __X11:__ There is no mechanism for setting the window icon yet.
  *
  *  @remarks __X11:__ Some window managers will not respect the placement of
  *  initially hidden windows.
+ *
+ *  @remarks __X11:__ Due to the asynchronous nature of X11, it may take
+ *  a moment for a window to reach its requested state.  This means you may not
+ *  be able to query the final size, position or other attributes directly after
+ *  window creation.
  *
  *  @par Reentrancy
  *  This function may not be called from a callback.
@@ -2572,9 +2579,9 @@ GLFWAPI void glfwGetCursorPos(GLFWwindow* window, double* xpos, double* ypos);
  *  @param[in] ypos The desired y-coordinate, relative to the top edge of the
  *  client area.
  *
- *  @remarks __X11:__ Due to the asynchronous nature of a modern X desktop, it
- *  may take a moment for the window focus event to arrive.  This means you will
- *  not be able to set the cursor position directly after window creation.
+ *  @remarks __X11:__ Due to the asynchronous nature of X11, it may take
+ *  a moment for the window focus event to arrive.  This means you may not be
+ *  able to set the cursor position directly after window creation.
  *
  *  @par Thread Safety
  *  This function may only be called from the main thread.
@@ -2594,9 +2601,9 @@ GLFWAPI void glfwSetCursorPos(GLFWwindow* window, double xpos, double ypos);
  *  glfwSetCursor.  The cursor can be destroyed with @ref glfwDestroyCursor.
  *  Any remaining cursors are destroyed by @ref glfwTerminate.
  *
- *  The pixels are 32-bit little-endian RGBA, i.e. eight bits per channel.  They
- *  are arranged canonically as packed sequential rows, starting from the
- *  top-left corner.
+ *  The pixels are 32-bit, little-endian, non-premultiplied RGBA, i.e. eight
+ *  bits per channel.  They are arranged canonically as packed sequential rows,
+ *  starting from the top-left corner.
  *
  *  The cursor hotspot is specified in pixels, relative to the upper-left corner
  *  of the cursor image.  Like all other coordinate systems in GLFW, the X-axis

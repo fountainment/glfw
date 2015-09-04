@@ -69,6 +69,10 @@
  #include "../deps/GL/glext.h"
 #endif
 
+typedef void (APIENTRY * PFNGLCLEARPROC)(GLbitfield);
+typedef const GLubyte* (APIENTRY * PFNGLGETSTRINGPROC)(GLenum);
+typedef void (APIENTRY * PFNGLGETINTEGERVPROC)(GLenum,GLint*);
+
 typedef struct _GLFWwndconfig   _GLFWwndconfig;
 typedef struct _GLFWctxconfig   _GLFWctxconfig;
 typedef struct _GLFWfbconfig    _GLFWfbconfig;
@@ -261,6 +265,9 @@ struct _GLFWwindow
 #if defined(_GLFW_USE_OPENGL)
     PFNGLGETSTRINGIPROC GetStringi;
 #endif
+    PFNGLGETINTEGERVPROC GetIntegerv;
+    PFNGLGETSTRINGPROC  GetString;
+    PFNGLCLEARPROC      Clear;
 
     struct {
         GLFWwindowposfun        pos;
@@ -799,7 +806,7 @@ void _glfwSplitBPP(int bpp, int* red, int* green, int* blue);
  *  @return `GL_TRUE` if the extension was found, or `GL_FALSE` otherwise.
  *  @ingroup utility
  */
-int _glfwStringInExtensionString(const char* string, const GLubyte* extensions);
+int _glfwStringInExtensionString(const char* string, const char* extensions);
 
 /*! @brief Chooses the framebuffer config that best matches the desired one.
  *  @param[in] desired The desired framebuffer config.

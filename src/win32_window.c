@@ -466,8 +466,8 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
                     break;
 
                 _glfwInputCursorMotion(window,
-                                        x - window->win32.cursorPosX,
-                                        y - window->win32.cursorPosY);
+                                       x - window->win32.cursorPosX,
+                                       y - window->win32.cursorPosY);
             }
             else
                 _glfwInputCursorMotion(window, x, y);
@@ -475,7 +475,7 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
             window->win32.cursorPosX = x;
             window->win32.cursorPosY = y;
 
-            if (!window->win32.cursorInside)
+            if (!window->win32.cursorTracked)
             {
                 TRACKMOUSEEVENT tme;
                 ZeroMemory(&tme, sizeof(tme));
@@ -484,7 +484,7 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
                 tme.hwndTrack = window->win32.handle;
                 TrackMouseEvent(&tme);
 
-                window->win32.cursorInside = GL_TRUE;
+                window->win32.cursorTracked = GL_TRUE;
                 _glfwInputCursorEnter(window, GL_TRUE);
             }
 
@@ -493,7 +493,7 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
 
         case WM_MOUSELEAVE:
         {
-            window->win32.cursorInside = GL_FALSE;
+            window->win32.cursorTracked = GL_FALSE;
             _glfwInputCursorEnter(window, GL_FALSE);
             return 0;
         }
@@ -596,23 +596,23 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
 
         case WM_DROPFILES:
         {
-            HDROP hDrop = (HDROP) wParam;
+            HDROP drop = (HDROP) wParam;
             POINT pt;
             int i;
 
-            const int count = DragQueryFileW(hDrop, 0xffffffff, NULL, 0);
+            const int count = DragQueryFileW(drop, 0xffffffff, NULL, 0);
             char** paths = calloc(count, sizeof(char*));
 
             // Move the mouse to the position of the drop
-            DragQueryPoint(hDrop, &pt);
+            DragQueryPoint(drop, &pt);
             _glfwInputCursorMotion(window, pt.x, pt.y);
 
             for (i = 0;  i < count;  i++)
             {
-                const UINT length = DragQueryFileW(hDrop, i, NULL, 0);
+                const UINT length = DragQueryFileW(drop, i, NULL, 0);
                 WCHAR* buffer = calloc(length + 1, sizeof(WCHAR));
 
-                DragQueryFileW(hDrop, i, buffer, length + 1);
+                DragQueryFileW(drop, i, buffer, length + 1);
                 paths[i] = _glfwCreateUTF8FromWideString(buffer);
 
                 free(buffer);
@@ -624,7 +624,7 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
                 free(paths[i]);
             free(paths);
 
-            DragFinish(hDrop);
+            DragFinish(drop);
             return 0;
         }
     }
@@ -1037,12 +1037,18 @@ void _glfwPlatformPollEvents(void)
                 _glfwInputKey(window, GLFW_KEY_RIGHT_SHIFT, 0, GLFW_RELEASE, mods);
         }
 
-        // Did the cursor move in an focused window that has disabled the cursor
         if (window->cursorMode == GLFW_CURSOR_DISABLED)
         {
             int width, height;
             _glfwPlatformGetWindowSize(window, &width, &height);
-            _glfwPlatformSetCursorPos(window, width / 2, height / 2);
+
+            // NOTE: Re-center the cursor only if it has moved since the last
+            //       call, to avoid breaking glfwWaitEvents with WM_MOUSEMOVE
+            if (window->win32.cursorPosX != width / 2 ||
+                window->win32.cursorPosY != height / 2)
+            {
+                _glfwPlatformSetCursorPos(window, width / 2, height / 2);
+            }
         }
     }
 }
@@ -1190,19 +1196,24 @@ void _glfwPlatformDestroyCursor(_GLFWcursor* cursor)
 
 void _glfwPlatformSetCursor(_GLFWwindow* window, _GLFWcursor* cursor)
 {
-    // It should be guaranteed that the cursor is not being used by this window if
-    // the following condition is not met. That way it should be safe to destroy the
-    // cursor after calling glfwSetCursor(window, NULL) on all windows using the cursor.
+    POINT pos;
 
-    if (_glfw.cursorWindow == window &&
-        window->cursorMode == GLFW_CURSOR_NORMAL &&
-        window->win32.cursorInside)
-    {
-        if (cursor)
-            SetCursor(cursor->win32.handle);
-        else
-            SetCursor(LoadCursorW(NULL, IDC_ARROW));
-    }
+    if (_glfw.cursorWindow != window)
+        return;
+
+    if (window->cursorMode != GLFW_CURSOR_NORMAL)
+        return;
+
+    if (!GetCursorPos(&pos))
+        return;
+
+    if (WindowFromPoint(pos) != window->win32.handle)
+        return;
+
+    if (cursor)
+        SetCursor(cursor->win32.handle);
+    else
+        SetCursor(LoadCursorW(NULL, IDC_ARROW));
 }
 
 void _glfwPlatformSetClipboardString(_GLFWwindow* window, const char* string)

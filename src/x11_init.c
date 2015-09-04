@@ -38,7 +38,7 @@
 
 // Translate an X11 key code to a GLFW key code.
 //
-static int translateKey(int scancode)
+static int translateKeyCode(int scancode)
 {
     int keySym;
 
@@ -241,15 +241,14 @@ static void createKeyTables(void)
         // keyboard layout
 
         char name[XkbKeyNameLength + 1];
-        XkbDescPtr descr = XkbGetKeyboard(_glfw.x11.display,
-                                          XkbAllComponentsMask,
-                                          XkbUseCoreKbd);
+        XkbDescPtr desc = XkbGetMap(_glfw.x11.display, 0, XkbUseCoreKbd);
+        XkbGetNames(_glfw.x11.display, XkbKeyNamesMask, desc);
 
         // Find the X11 key code -> GLFW key code mapping
-        for (scancode = descr->min_key_code;  scancode <= descr->max_key_code;  scancode++)
+        for (scancode = desc->min_key_code;  scancode <= desc->max_key_code;  scancode++)
         {
-            memcpy(name, descr->names->keys[scancode].name, XkbKeyNameLength);
-            name[XkbKeyNameLength] = 0;
+            memcpy(name, desc->names->keys[scancode].name, XkbKeyNameLength);
+            name[XkbKeyNameLength] = '\0';
 
             // Map the key name to a GLFW key code. Note: We only map printable
             // keys here, and we use the US keyboard layout. The rest of the
@@ -309,7 +308,8 @@ static void createKeyTables(void)
                 _glfw.x11.publicKeys[scancode] = key;
         }
 
-        XkbFreeKeyboard(descr, 0, True);
+        XkbFreeNames(desc, XkbKeyNamesMask, True);
+        XkbFreeClientMap(desc, 0, True);
     }
 
     // Translate the un-translated key codes using traditional X11 KeySym
@@ -317,7 +317,7 @@ static void createKeyTables(void)
     for (scancode = 0;  scancode < 256;  scancode++)
     {
         if (_glfw.x11.publicKeys[scancode] < 0)
-            _glfw.x11.publicKeys[scancode] = translateKey(scancode);
+            _glfw.x11.publicKeys[scancode] = translateKeyCode(scancode);
     }
 }
 
@@ -719,7 +719,18 @@ int _glfwPlatformInit(void)
     _glfw.x11.display = XOpenDisplay(NULL);
     if (!_glfw.x11.display)
     {
-        _glfwInputError(GLFW_PLATFORM_ERROR, "X11: Failed to open X display");
+        const char* display = getenv("DISPLAY");
+        if (display)
+        {
+            _glfwInputError(GLFW_PLATFORM_ERROR,
+                            "X11: Failed to open display %s", display);
+        }
+        else
+        {
+            _glfwInputError(GLFW_PLATFORM_ERROR,
+                            "X11: The DISPLAY environment variable is missing");
+        }
+
         return GL_FALSE;
     }
 
@@ -775,13 +786,16 @@ void _glfwPlatformTerminate(void)
     }
 
     _glfwTerminateJoysticks();
-    _glfwTerminateContextAPI();
 
     if (_glfw.x11.display)
     {
         XCloseDisplay(_glfw.x11.display);
         _glfw.x11.display = NULL;
     }
+
+    // NOTE: This needs to be done after XCloseDisplay, as libGL registers
+    //       internal cleanup callbacks in libX11
+    _glfwTerminateContextAPI();
 }
 
 const char* _glfwPlatformGetVersionString(void)
@@ -799,6 +813,12 @@ const char* _glfwPlatformGetVersionString(void)
 #endif
 #if defined(__linux__)
         " /dev/js"
+#endif
+#if defined(_GLFW_HAS_XINPUT)
+        " XI"
+#endif
+#if defined(_GLFW_HAS_XF86VM)
+        " Xf86vm"
 #endif
 #if defined(_GLFW_BUILD_DLL)
         " shared"

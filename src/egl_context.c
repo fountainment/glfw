@@ -78,7 +78,7 @@ static const char* getErrorString(EGLint error)
 static int getConfigAttrib(EGLConfig config, int attrib)
 {
     int value;
-    eglGetConfigAttrib(_glfw.egl.display, config, attrib, &value);
+    _glfw_eglGetConfigAttrib(_glfw.egl.display, config, attrib, &value);
     return value;
 }
 
@@ -93,7 +93,7 @@ static GLboolean chooseFBConfigs(const _GLFWctxconfig* ctxconfig,
     const _GLFWfbconfig* closest;
     int i, nativeCount, usableCount;
 
-    eglGetConfigs(_glfw.egl.display, NULL, 0, &nativeCount);
+    _glfw_eglGetConfigs(_glfw.egl.display, NULL, 0, &nativeCount);
     if (!nativeCount)
     {
         _glfwInputError(GLFW_API_UNAVAILABLE, "EGL: No EGLConfigs returned");
@@ -101,7 +101,8 @@ static GLboolean chooseFBConfigs(const _GLFWctxconfig* ctxconfig,
     }
 
     nativeConfigs = calloc(nativeCount, sizeof(EGLConfig));
-    eglGetConfigs(_glfw.egl.display, nativeConfigs, nativeCount, &nativeCount);
+    _glfw_eglGetConfigs(_glfw.egl.display, nativeConfigs,
+                        nativeCount, &nativeCount);
 
     usableConfigs = calloc(nativeCount, sizeof(_GLFWfbconfig));
     usableCount = 0;
@@ -178,28 +179,91 @@ static GLboolean chooseFBConfigs(const _GLFWctxconfig* ctxconfig,
 //
 int _glfwInitContextAPI(void)
 {
+    int i;
+    const char* sonames[] =
+    {
+#if defined(_GLFW_WIN32)
+        "libEGL.dll",
+        "EGL.dll",
+#elif defined(_GLFW_COCOA)
+        "libEGL.dylib",
+#else
+        "libEGL.so.1",
+#endif
+        NULL
+    };
+
     if (!_glfwCreateContextTLS())
         return GL_FALSE;
 
-    _glfw.egl.display = eglGetDisplay((EGLNativeDisplayType)_GLFW_EGL_NATIVE_DISPLAY);
+    for (i = 0;  sonames[i];  i++)
+    {
+        _glfw.egl.handle = _glfw_dlopen(sonames[i]);
+        if (_glfw.egl.handle)
+            break;
+    }
+
+    if (!_glfw.egl.handle)
+    {
+        _glfwInputError(GLFW_API_UNAVAILABLE, "EGL: Failed to load EGL");
+        return GL_FALSE;
+    }
+
+    _glfw.egl.GetConfigAttrib =
+        _glfw_dlsym(_glfw.egl.handle, "eglGetConfigAttrib");
+    _glfw.egl.GetConfigs =
+        _glfw_dlsym(_glfw.egl.handle, "eglGetConfigs");
+    _glfw.egl.GetDisplay =
+        _glfw_dlsym(_glfw.egl.handle, "eglGetDisplay");
+    _glfw.egl.GetError =
+        _glfw_dlsym(_glfw.egl.handle, "eglGetError");
+    _glfw.egl.Initialize =
+        _glfw_dlsym(_glfw.egl.handle, "eglInitialize");
+    _glfw.egl.Terminate =
+        _glfw_dlsym(_glfw.egl.handle, "eglTerminate");
+    _glfw.egl.BindAPI =
+        _glfw_dlsym(_glfw.egl.handle, "eglBindAPI");
+    _glfw.egl.CreateContext =
+        _glfw_dlsym(_glfw.egl.handle, "eglCreateContext");
+    _glfw.egl.DestroySurface =
+        _glfw_dlsym(_glfw.egl.handle, "eglDestroySurface");
+    _glfw.egl.DestroyContext =
+        _glfw_dlsym(_glfw.egl.handle, "eglDestroyContext");
+    _glfw.egl.CreateWindowSurface =
+        _glfw_dlsym(_glfw.egl.handle, "eglCreateWindowSurface");
+    _glfw.egl.MakeCurrent =
+        _glfw_dlsym(_glfw.egl.handle, "eglMakeCurrent");
+    _glfw.egl.SwapBuffers =
+        _glfw_dlsym(_glfw.egl.handle, "eglSwapBuffers");
+    _glfw.egl.SwapInterval =
+        _glfw_dlsym(_glfw.egl.handle, "eglSwapInterval");
+    _glfw.egl.QueryString =
+        _glfw_dlsym(_glfw.egl.handle, "eglQueryString");
+    _glfw.egl.GetProcAddress =
+        _glfw_dlsym(_glfw.egl.handle, "eglGetProcAddress");
+
+    _glfw.egl.display =
+        _glfw_eglGetDisplay((EGLNativeDisplayType)_GLFW_EGL_NATIVE_DISPLAY);
     if (_glfw.egl.display == EGL_NO_DISPLAY)
     {
         _glfwInputError(GLFW_API_UNAVAILABLE,
                         "EGL: Failed to get EGL display: %s",
-                        getErrorString(eglGetError()));
+                        getErrorString(_glfw_eglGetError()));
         return GL_FALSE;
     }
 
-    if (!eglInitialize(_glfw.egl.display, &_glfw.egl.major, &_glfw.egl.minor))
+    if (!_glfw_eglInitialize(_glfw.egl.display,
+                             &_glfw.egl.major,
+                             &_glfw.egl.minor))
     {
         _glfwInputError(GLFW_API_UNAVAILABLE,
                         "EGL: Failed to initialize EGL: %s",
-                        getErrorString(eglGetError()));
+                        getErrorString(_glfw_eglGetError()));
         return GL_FALSE;
     }
 
-    if (_glfwPlatformExtensionSupported("EGL_KHR_create_context"))
-        _glfw.egl.KHR_create_context = GL_TRUE;
+    _glfw.egl.KHR_create_context =
+        _glfwPlatformExtensionSupported("EGL_KHR_create_context");
 
     return GL_TRUE;
 }
@@ -208,7 +272,14 @@ int _glfwInitContextAPI(void)
 //
 void _glfwTerminateContextAPI(void)
 {
-    eglTerminate(_glfw.egl.display);
+    if (_glfw_eglTerminate)
+        _glfw_eglTerminate(_glfw.egl.display);
+
+    if (_glfw.egl.handle)
+    {
+        _glfw_dlclose(_glfw.egl.handle);
+        _glfw.egl.handle = NULL;
+    }
 
     _glfwDestroyContextTLS();
 }
@@ -248,8 +319,8 @@ int _glfwCreateContext(_GLFWwindow* window,
         EGLint redBits, greenBits, blueBits, alphaBits, visualID = 0;
         XVisualInfo info;
 
-        eglGetConfigAttrib(_glfw.egl.display, config,
-                           EGL_NATIVE_VISUAL_ID, &visualID);
+        _glfw_eglGetConfigAttrib(_glfw.egl.display, config,
+                                 EGL_NATIVE_VISUAL_ID, &visualID);
 
         info.screen = _glfw.x11.screen;
         mask = VisualScreenMask;
@@ -265,14 +336,14 @@ int _glfwCreateContext(_GLFWwindow* window,
             // Some EGL drivers do not implement the EGL_NATIVE_VISUAL_ID
             // attribute, so attempt to find the closest match
 
-            eglGetConfigAttrib(_glfw.egl.display, config,
-                               EGL_RED_SIZE, &redBits);
-            eglGetConfigAttrib(_glfw.egl.display, config,
-                               EGL_GREEN_SIZE, &greenBits);
-            eglGetConfigAttrib(_glfw.egl.display, config,
-                               EGL_BLUE_SIZE, &blueBits);
-            eglGetConfigAttrib(_glfw.egl.display, config,
-                               EGL_ALPHA_SIZE, &alphaBits);
+            _glfw_eglGetConfigAttrib(_glfw.egl.display, config,
+                                     EGL_RED_SIZE, &redBits);
+            _glfw_eglGetConfigAttrib(_glfw.egl.display, config,
+                                     EGL_GREEN_SIZE, &greenBits);
+            _glfw_eglGetConfigAttrib(_glfw.egl.display, config,
+                                     EGL_BLUE_SIZE, &blueBits);
+            _glfw_eglGetConfigAttrib(_glfw.egl.display, config,
+                                     EGL_ALPHA_SIZE, &alphaBits);
 
             info.depth = redBits + greenBits + blueBits + alphaBits;
             mask |= VisualDepthMask;
@@ -291,21 +362,21 @@ int _glfwCreateContext(_GLFWwindow* window,
 
     if (ctxconfig->api == GLFW_OPENGL_ES_API)
     {
-        if (!eglBindAPI(EGL_OPENGL_ES_API))
+        if (!_glfw_eglBindAPI(EGL_OPENGL_ES_API))
         {
             _glfwInputError(GLFW_API_UNAVAILABLE,
                             "EGL: Failed to bind OpenGL ES: %s",
-                            getErrorString(eglGetError()));
+                            getErrorString(_glfw_eglGetError()));
             return GL_FALSE;
         }
     }
     else
     {
-        if (!eglBindAPI(EGL_OPENGL_API))
+        if (!_glfw_eglBindAPI(EGL_OPENGL_API))
         {
             _glfwInputError(GLFW_API_UNAVAILABLE,
                             "EGL: Failed to bind OpenGL: %s",
-                            getErrorString(eglGetError()));
+                            getErrorString(_glfw_eglGetError()));
             return GL_FALSE;
         }
     }
@@ -371,18 +442,82 @@ int _glfwCreateContext(_GLFWwindow* window,
     // Context release behaviors (GL_KHR_context_flush_control) are not yet
     // supported on EGL but are not a hard constraint, so ignore and continue
 
-    window->egl.context = eglCreateContext(_glfw.egl.display,
-                                           config, share, attribs);
+    window->egl.context = _glfw_eglCreateContext(_glfw.egl.display,
+                                                 config, share, attribs);
 
     if (window->egl.context == EGL_NO_CONTEXT)
     {
         _glfwInputError(GLFW_VERSION_UNAVAILABLE,
                         "EGL: Failed to create context: %s",
-                        getErrorString(eglGetError()));
+                        getErrorString(_glfw_eglGetError()));
         return GL_FALSE;
     }
 
     window->egl.config = config;
+
+    // Load the appropriate client library
+    {
+        int i;
+        const char** sonames;
+        const char* es1sonames[] =
+        {
+#if defined(_GLFW_WIN32)
+            "GLESv1_CM.dll",
+            "libGLES_CM.dll",
+#elif defined(_GLFW_COCOA)
+            "libGLESv1_CM.dylib",
+#else
+            "libGLESv1_CM.so.1",
+            "libGLES_CM.so.1",
+#endif
+            NULL
+        };
+        const char* es2sonames[] =
+        {
+#if defined(_GLFW_WIN32)
+            "GLESv2.dll",
+            "libGLESv2.dll",
+#elif defined(_GLFW_COCOA)
+            "libGLESv2.dylib",
+#else
+            "libGLESv2.so.2",
+#endif
+            NULL
+        };
+        const char* glsonames[] =
+        {
+#if defined(_GLFW_WIN32)
+#elif defined(_GLFW_COCOA)
+#else
+            "libGL.so.1",
+#endif
+            NULL
+        };
+
+        if (ctxconfig->api == GLFW_OPENGL_ES_API)
+        {
+            if (ctxconfig->major == 1)
+                sonames = es1sonames;
+            else
+                sonames = es2sonames;
+        }
+        else
+            sonames = glsonames;
+
+        for (i = 0;  sonames[i];  i++)
+        {
+            window->egl.client = _glfw_dlopen(sonames[i]);
+            if (window->egl.client)
+                break;
+        }
+
+        if (!window->egl.client)
+        {
+            _glfwInputError(GLFW_API_UNAVAILABLE,
+                            "EGL: Failed to load client library");
+            return GL_FALSE;
+        }
+    }
 
     return GL_TRUE;
 }
@@ -394,6 +529,19 @@ int _glfwCreateContext(_GLFWwindow* window,
 void _glfwDestroyContext(_GLFWwindow* window)
 {
 #if defined(_GLFW_X11)
+    // NOTE: Do not unload libGL.so.1 while the X11 display is still open,
+    //       as it will make XCloseDisplay segfault
+    if (window->context.api != GLFW_OPENGL_API)
+#endif // _GLFW_X11
+    {
+        if (window->egl.client)
+        {
+            _glfw_dlclose(window->egl.client);
+            window->egl.client = NULL;
+        }
+    }
+
+#if defined(_GLFW_X11)
     if (window->egl.visual)
     {
        XFree(window->egl.visual);
@@ -403,13 +551,13 @@ void _glfwDestroyContext(_GLFWwindow* window)
 
     if (window->egl.surface)
     {
-        eglDestroySurface(_glfw.egl.display, window->egl.surface);
+        _glfw_eglDestroySurface(_glfw.egl.display, window->egl.surface);
         window->egl.surface = EGL_NO_SURFACE;
     }
 
     if (window->egl.context)
     {
-        eglDestroyContext(_glfw.egl.display, window->egl.context);
+        _glfw_eglDestroyContext(_glfw.egl.display, window->egl.context);
         window->egl.context = EGL_NO_CONTEXT;
     }
 }
@@ -438,27 +586,30 @@ void _glfwPlatformMakeContextCurrent(_GLFWwindow* window)
     {
         if (window->egl.surface == EGL_NO_SURFACE)
         {
-            window->egl.surface = eglCreateWindowSurface(_glfw.egl.display,
-                                                         window->egl.config,
-                                                         (EGLNativeWindowType)_GLFW_EGL_NATIVE_WINDOW,
-                                                         NULL);
+            window->egl.surface =
+                _glfw_eglCreateWindowSurface(_glfw.egl.display,
+                                             window->egl.config,
+                                             (EGLNativeWindowType)_GLFW_EGL_NATIVE_WINDOW,
+                                             NULL);
             if (window->egl.surface == EGL_NO_SURFACE)
             {
                 _glfwInputError(GLFW_PLATFORM_ERROR,
                                 "EGL: Failed to create window surface: %s",
-                                getErrorString(eglGetError()));
+                                getErrorString(_glfw_eglGetError()));
             }
         }
 
-        eglMakeCurrent(_glfw.egl.display,
-                       window->egl.surface,
-                       window->egl.surface,
-                       window->egl.context);
+        _glfw_eglMakeCurrent(_glfw.egl.display,
+                             window->egl.surface,
+                             window->egl.surface,
+                             window->egl.context);
     }
     else
     {
-        eglMakeCurrent(_glfw.egl.display,
-                       EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+        _glfw_eglMakeCurrent(_glfw.egl.display,
+                             EGL_NO_SURFACE,
+                             EGL_NO_SURFACE,
+                             EGL_NO_CONTEXT);
     }
 
     _glfwSetContextTLS(window);
@@ -466,22 +617,21 @@ void _glfwPlatformMakeContextCurrent(_GLFWwindow* window)
 
 void _glfwPlatformSwapBuffers(_GLFWwindow* window)
 {
-    eglSwapBuffers(_glfw.egl.display, window->egl.surface);
+    _glfw_eglSwapBuffers(_glfw.egl.display, window->egl.surface);
 }
 
 void _glfwPlatformSwapInterval(int interval)
 {
-    eglSwapInterval(_glfw.egl.display, interval);
+    _glfw_eglSwapInterval(_glfw.egl.display, interval);
 }
 
 int _glfwPlatformExtensionSupported(const char* extension)
 {
-    const char* extensions;
-
-    extensions = eglQueryString(_glfw.egl.display, EGL_EXTENSIONS);
-    if (extensions != NULL)
+    const char* extensions = _glfw_eglQueryString(_glfw.egl.display,
+                                                  EGL_EXTENSIONS);
+    if (extensions)
     {
-        if (_glfwStringInExtensionString(extension, (unsigned char*) extensions))
+        if (_glfwStringInExtensionString(extension, extensions))
             return GL_TRUE;
     }
 
@@ -490,7 +640,16 @@ int _glfwPlatformExtensionSupported(const char* extension)
 
 GLFWglproc _glfwPlatformGetProcAddress(const char* procname)
 {
-    return eglGetProcAddress(procname);
+    _GLFWwindow* window = _glfwPlatformGetCurrentContext();
+
+    if (window->egl.client)
+    {
+        GLFWglproc proc = (GLFWglproc) _glfw_dlsym(window->egl.client, procname);
+        if (proc)
+            return proc;
+    }
+
+    return _glfw_eglGetProcAddress(procname);
 }
 
 

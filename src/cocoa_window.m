@@ -1164,8 +1164,14 @@ void _glfwPlatformSetCursorPos(_GLFWwindow* window, double x, double y)
     }
     else
     {
+#if MAC_OS_X_VERSION_MAX_ALLOWED >= 1070
+        const NSRect localRect = NSMakeRect(x, contentRect.size.height - y - 1, 0, 0);
+        const NSRect globalRect = [window->ns.object convertRectToScreen:localRect];
+        const NSPoint globalPoint = globalRect.origin;
+#else
         const NSPoint localPoint = NSMakePoint(x, contentRect.size.height - y - 1);
         const NSPoint globalPoint = [window->ns.object convertBaseToScreen:localPoint];
+#endif /*MAC_OS_X_VERSION_MAX_ALLOWED*/
 
         CGWarpMouseCursorPosition(CGPointMake(globalPoint.x,
                                               transformY(globalPoint.y)));
@@ -1188,6 +1194,9 @@ int _glfwPlatformCreateCursor(_GLFWcursor* cursor,
 {
     NSImage* native;
     NSBitmapImageRep* rep;
+
+    if (!initializeAppKit())
+        return GL_FALSE;
 
     rep = [[NSBitmapImageRep alloc]
         initWithBitmapDataPlanes:NULL
@@ -1224,6 +1233,9 @@ int _glfwPlatformCreateCursor(_GLFWcursor* cursor,
 
 int _glfwPlatformCreateStandardCursor(_GLFWcursor* cursor, int shape)
 {
+    if (!initializeAppKit())
+        return GL_FALSE;
+
     cursor->ns.object = getStandardCursor(shape);
     if (!cursor->ns.object)
     {
