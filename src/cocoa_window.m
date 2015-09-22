@@ -32,23 +32,6 @@
 #include <crt_externs.h>
 
 
-// Returns the NSScreen corresponding to the specified CGDirectDisplayID
-//
-static NSScreen* getScreen(CGDirectDisplayID displayID)
-{
-    NSArray* screens = [NSScreen screens];
-
-    for (NSScreen* screen in screens)
-    {
-        NSDictionary* dictionary = [screen deviceDescription];
-        NSNumber* number = [dictionary objectForKey:@"NSScreenNumber"];
-        if ([number unsignedIntegerValue] == displayID)
-            return screen;
-    }
-
-    return nil;
-}
-
 // Returns the specified standard cursor
 //
 static NSCursor* getStandardCursor(int shape)
@@ -100,13 +83,16 @@ static void updateModeCursor(_GLFWwindow* window)
 //
 static GLboolean enterFullscreenMode(_GLFWwindow* window)
 {
+    GLFWvidmode mode;
     GLboolean status;
+    int xpos, ypos;
 
     status = _glfwSetVideoMode(window->monitor, &window->videoMode);
 
-    // NOTE: The window is resized despite mode setting failure to make
-    //       glfwSetWindowSize more robust
-    [window->ns.object setFrame:[getScreen(window->monitor->ns.displayID) frame]
+    _glfwPlatformGetVideoMode(window->monitor, &mode);
+    _glfwPlatformGetMonitorPos(window->monitor, &xpos, &ypos);
+
+    [window->ns.object setFrame:NSMakeRect(xpos, ypos, mode.width, mode.height)
                         display:YES];
 
     return status;
@@ -214,7 +200,6 @@ static int translateKey(unsigned int key)
 
     _glfwInputFramebufferSize(window, fbRect.size.width, fbRect.size.height);
     _glfwInputWindowSize(window, contentRect.size.width, contentRect.size.height);
-    _glfwInputWindowDamage(window);
 }
 
 - (void)windowDidMove:(NSNotification *)notification
@@ -234,19 +219,22 @@ static int translateKey(unsigned int key)
 
 - (void)windowDidMiniaturize:(NSNotification *)notification
 {
+    if (window->monitor)
+        leaveFullscreenMode(window);
+
     _glfwInputWindowIconify(window, GL_TRUE);
 }
 
 - (void)windowDidDeminiaturize:(NSNotification *)notification
 {
+    if (window->monitor)
+        enterFullscreenMode(window);
+
     _glfwInputWindowIconify(window, GL_FALSE);
 }
 
 - (void)windowDidBecomeKey:(NSNotification *)notification
 {
-    if (window->monitor && window->autoIconify)
-        enterFullscreenMode(window);
-
     if (_glfw.cursorWindow == window &&
         window->cursorMode == GLFW_CURSOR_DISABLED)
     {
@@ -260,7 +248,7 @@ static int translateKey(unsigned int key)
 - (void)windowDidResignKey:(NSNotification *)notification
 {
     if (window->monitor && window->autoIconify)
-        leaveFullscreenMode(window);
+        _glfwPlatformIconifyWindow(window);
 
     _glfwInputWindowFocus(window, GL_FALSE);
 }
@@ -473,6 +461,10 @@ static int translateKey(unsigned int key)
     const NSRect fbRect = convertRectToBacking(window, contentRect);
 
     _glfwInputFramebufferSize(window, fbRect.size.width, fbRect.size.height);
+}
+
+- (void)drawRect:(NSRect)rect
+{
     _glfwInputWindowDamage(window);
 }
 
@@ -858,7 +850,15 @@ static GLboolean createWindow(_GLFWwindow* window,
     NSRect contentRect;
 
     if (wndconfig->monitor)
-        contentRect = [getScreen(wndconfig->monitor->ns.displayID) frame];
+    {
+        GLFWvidmode mode;
+        int xpos, ypos;
+
+        _glfwPlatformGetVideoMode(window->monitor, &mode);
+        _glfwPlatformGetMonitorPos(window->monitor, &xpos, &ypos);
+
+        contentRect = NSMakeRect(xpos, ypos, mode.width, mode.height);
+    }
     else
         contentRect = NSMakeRect(0, 0, wndconfig->width, wndconfig->height);
 
@@ -885,9 +885,6 @@ static GLboolean createWindow(_GLFWwindow* window,
     if (wndconfig->monitor)
     {
         [window->ns.object setLevel:NSMainMenuWindowLevel + 1];
-
-        if (window->autoIconify)
-            [window->ns.object setHidesOnDeactivate:YES];
     }
     else
     {
