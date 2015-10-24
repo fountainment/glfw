@@ -1,5 +1,5 @@
 //========================================================================
-// GLFW 3.1 - www.glfw.org
+// GLFW 3.2 - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2002-2006 Marcus Geelnard
 // Copyright (c) 2006-2010 Camilla Berglund <elmindreda@elmindreda.org>
@@ -35,7 +35,7 @@
 
 // Parses the client API version string and extracts the version number
 //
-static GLboolean parseVersionString(int* api, int* major, int* minor, int* rev)
+static GLFWbool parseVersionString(int* api, int* major, int* minor, int* rev)
 {
     int i;
     _GLFWwindow* window;
@@ -57,7 +57,7 @@ static GLboolean parseVersionString(int* api, int* major, int* minor, int* rev)
     {
         _glfwInputError(GLFW_PLATFORM_ERROR,
                         "Failed to retrieve context version string");
-        return GL_FALSE;
+        return GLFW_FALSE;
     }
 
     for (i = 0;  prefixes[i];  i++)
@@ -76,10 +76,10 @@ static GLboolean parseVersionString(int* api, int* major, int* minor, int* rev)
     {
         _glfwInputError(GLFW_PLATFORM_ERROR,
                         "No version found in context version string");
-        return GL_FALSE;
+        return GLFW_FALSE;
     }
 
-    return GL_TRUE;
+    return GLFW_TRUE;
 }
 
 
@@ -87,13 +87,13 @@ static GLboolean parseVersionString(int* api, int* major, int* minor, int* rev)
 //////                       GLFW internal API                      //////
 //////////////////////////////////////////////////////////////////////////
 
-GLboolean _glfwIsValidContextConfig(const _GLFWctxconfig* ctxconfig)
+GLFWbool _glfwIsValidContextConfig(const _GLFWctxconfig* ctxconfig)
 {
     if (ctxconfig->api != GLFW_OPENGL_API &&
         ctxconfig->api != GLFW_OPENGL_ES_API)
     {
         _glfwInputError(GLFW_INVALID_ENUM, "Invalid client API");
-        return GL_FALSE;
+        return GLFW_FALSE;
     }
 
     if (ctxconfig->api == GLFW_OPENGL_API)
@@ -112,7 +112,7 @@ GLboolean _glfwIsValidContextConfig(const _GLFWctxconfig* ctxconfig)
             _glfwInputError(GLFW_INVALID_VALUE,
                             "Invalid OpenGL version %i.%i",
                             ctxconfig->major, ctxconfig->minor);
-            return GL_FALSE;
+            return GLFW_FALSE;
         }
 
         if (ctxconfig->profile)
@@ -122,10 +122,10 @@ GLboolean _glfwIsValidContextConfig(const _GLFWctxconfig* ctxconfig)
             {
                 _glfwInputError(GLFW_INVALID_ENUM,
                                 "Invalid OpenGL profile");
-                return GL_FALSE;
+                return GLFW_FALSE;
             }
 
-            if (ctxconfig->major < 3 ||
+            if (ctxconfig->major <= 2 ||
                 (ctxconfig->major == 3 && ctxconfig->minor < 2))
             {
                 // Desktop OpenGL context profiles are only defined for version 3.2
@@ -133,16 +133,16 @@ GLboolean _glfwIsValidContextConfig(const _GLFWctxconfig* ctxconfig)
 
                 _glfwInputError(GLFW_INVALID_VALUE,
                                 "Context profiles are only defined for OpenGL version 3.2 and above");
-                return GL_FALSE;
+                return GLFW_FALSE;
             }
         }
 
-        if (ctxconfig->forward && ctxconfig->major < 3)
+        if (ctxconfig->forward && ctxconfig->major <= 2)
         {
             // Forward-compatible contexts are only defined for OpenGL version 3.0 and above
             _glfwInputError(GLFW_INVALID_VALUE,
                             "Forward-compatibility is only defined for OpenGL version 3.0 and above");
-            return GL_FALSE;
+            return GLFW_FALSE;
         }
     }
     else if (ctxconfig->api == GLFW_OPENGL_ES_API)
@@ -159,7 +159,7 @@ GLboolean _glfwIsValidContextConfig(const _GLFWctxconfig* ctxconfig)
             _glfwInputError(GLFW_INVALID_VALUE,
                             "Invalid OpenGL ES version %i.%i",
                             ctxconfig->major, ctxconfig->minor);
-            return GL_FALSE;
+            return GLFW_FALSE;
         }
     }
 
@@ -170,7 +170,7 @@ GLboolean _glfwIsValidContextConfig(const _GLFWctxconfig* ctxconfig)
         {
             _glfwInputError(GLFW_INVALID_ENUM,
                             "Invalid context robustness mode");
-            return GL_FALSE;
+            return GLFW_FALSE;
         }
     }
 
@@ -181,11 +181,11 @@ GLboolean _glfwIsValidContextConfig(const _GLFWctxconfig* ctxconfig)
         {
             _glfwInputError(GLFW_INVALID_ENUM,
                             "Invalid context release behavior");
-            return GL_FALSE;
+            return GLFW_FALSE;
         }
     }
 
-    return GL_TRUE;
+    return GLFW_TRUE;
 }
 
 const _GLFWfbconfig* _glfwChooseFBConfig(const _GLFWfbconfig* desired,
@@ -351,7 +351,7 @@ const _GLFWfbconfig* _glfwChooseFBConfig(const _GLFWfbconfig* desired,
     return closest;
 }
 
-GLboolean _glfwRefreshContextAttribs(const _GLFWctxconfig* ctxconfig)
+GLFWbool _glfwRefreshContextAttribs(const _GLFWctxconfig* ctxconfig)
 {
     _GLFWwindow* window = _glfwPlatformGetCurrentContext();
 
@@ -364,11 +364,10 @@ GLboolean _glfwRefreshContextAttribs(const _GLFWctxconfig* ctxconfig)
                             &window->context.minor,
                             &window->context.revision))
     {
-        return GL_FALSE;
+        return GLFW_FALSE;
     }
 
-#if defined(_GLFW_USE_OPENGL)
-    if (window->context.major > 2)
+    if (window->context.major >= 3)
     {
         // OpenGL 3.0+ uses a different function for extension string retrieval
         // We cache it here instead of in glfwExtensionSupported mostly to alert
@@ -379,7 +378,7 @@ GLboolean _glfwRefreshContextAttribs(const _GLFWctxconfig* ctxconfig)
         {
             _glfwInputError(GLFW_PLATFORM_ERROR,
                             "Entry point retrieval is broken");
-            return GL_FALSE;
+            return GLFW_FALSE;
         }
     }
 
@@ -392,22 +391,22 @@ GLboolean _glfwRefreshContextAttribs(const _GLFWctxconfig* ctxconfig)
             window->GetIntegerv(GL_CONTEXT_FLAGS, &flags);
 
             if (flags & GL_CONTEXT_FLAG_FORWARD_COMPATIBLE_BIT)
-                window->context.forward = GL_TRUE;
+                window->context.forward = GLFW_TRUE;
 
             if (flags & GL_CONTEXT_FLAG_DEBUG_BIT)
-                window->context.debug = GL_TRUE;
+                window->context.debug = GLFW_TRUE;
             else if (glfwExtensionSupported("GL_ARB_debug_output") &&
                      ctxconfig->debug)
             {
                 // HACK: This is a workaround for older drivers (pre KHR_debug)
                 //       not setting the debug bit in the context flags for
                 //       debug contexts
-                window->context.debug = GL_TRUE;
+                window->context.debug = GLFW_TRUE;
             }
         }
 
         // Read back OpenGL context profile (OpenGL 3.2 and above)
-        if (window->context.major > 3 ||
+        if (window->context.major >= 4 ||
             (window->context.major == 3 && window->context.minor >= 2))
         {
             GLint mask;
@@ -470,12 +469,11 @@ GLboolean _glfwRefreshContextAttribs(const _GLFWctxconfig* ctxconfig)
         else if (behavior == GL_CONTEXT_RELEASE_BEHAVIOR_FLUSH)
             window->context.release = GLFW_RELEASE_BEHAVIOR_FLUSH;
     }
-#endif // _GLFW_USE_OPENGL
 
-    return GL_TRUE;
+    return GLFW_TRUE;
 }
 
-GLboolean _glfwIsValidContext(const _GLFWctxconfig* ctxconfig)
+GLFWbool _glfwIsValidContext(const _GLFWctxconfig* ctxconfig)
 {
     _GLFWwindow* window = _glfwPlatformGetCurrentContext();
 
@@ -491,10 +489,10 @@ GLboolean _glfwIsValidContext(const _GLFWctxconfig* ctxconfig)
         // {GLX|WGL}_ARB_create_context extension and fail here
 
         _glfwInputError(GLFW_VERSION_UNAVAILABLE, NULL);
-        return GL_FALSE;
+        return GLFW_FALSE;
     }
 
-    return GL_TRUE;
+    return GLFW_TRUE;
 }
 
 int _glfwStringInExtensionString(const char* string, const char* extensions)
@@ -508,7 +506,7 @@ int _glfwStringInExtensionString(const char* string, const char* extensions)
 
         where = strstr(start, string);
         if (!where)
-            return GL_FALSE;
+            return GLFW_FALSE;
 
         terminator = where + strlen(string);
         if (where == start || *(where - 1) == ' ')
@@ -520,7 +518,7 @@ int _glfwStringInExtensionString(const char* string, const char* extensions)
         start = terminator;
     }
 
-    return GL_TRUE;
+    return GLFW_TRUE;
 }
 
 
@@ -565,22 +563,21 @@ GLFWAPI int glfwExtensionSupported(const char* extension)
 {
     _GLFWwindow* window;
 
-    _GLFW_REQUIRE_INIT_OR_RETURN(GL_FALSE);
+    _GLFW_REQUIRE_INIT_OR_RETURN(GLFW_FALSE);
 
     window = _glfwPlatformGetCurrentContext();
     if (!window)
     {
         _glfwInputError(GLFW_NO_CURRENT_CONTEXT, NULL);
-        return GL_FALSE;
+        return GLFW_FALSE;
     }
 
     if (*extension == '\0')
     {
         _glfwInputError(GLFW_INVALID_VALUE, NULL);
-        return GL_FALSE;
+        return GLFW_FALSE;
     }
 
-#if defined(_GLFW_USE_OPENGL)
     if (window->context.major >= 3)
     {
         int i;
@@ -597,15 +594,14 @@ GLFWAPI int glfwExtensionSupported(const char* extension)
             {
                 _glfwInputError(GLFW_PLATFORM_ERROR,
                                 "Failed to retrieve extension string %i", i);
-                return GL_FALSE;
+                return GLFW_FALSE;
             }
 
             if (strcmp(en, extension) == 0)
-                return GL_TRUE;
+                return GLFW_TRUE;
         }
     }
     else
-#endif // _GLFW_USE_OPENGL
     {
         // Check if extension is in the old style OpenGL extensions string
 
@@ -614,11 +610,11 @@ GLFWAPI int glfwExtensionSupported(const char* extension)
         {
             _glfwInputError(GLFW_PLATFORM_ERROR,
                             "Failed to retrieve extension string");
-            return GL_FALSE;
+            return GLFW_FALSE;
         }
 
         if (_glfwStringInExtensionString(extension, extensions))
-            return GL_TRUE;
+            return GLFW_TRUE;
     }
 
     // Check if extension is in the platform-specific string

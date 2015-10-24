@@ -1,5 +1,5 @@
 //========================================================================
-// GLFW 3.1 OS X - www.glfw.org
+// GLFW 3.2 OS X - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2009-2010 Camilla Berglund <elmindreda@elmindreda.org>
 //
@@ -90,6 +90,7 @@ typedef struct _GLFWmonitorNS
 {
     CGDirectDisplayID   displayID;
     CGDisplayModeRef    previousMode;
+    uint32_t            unitNumber;
 
 } _GLFWmonitorNS;
 
@@ -115,7 +116,7 @@ typedef struct _GLFWtimeNS
 
 void _glfwInitTimer(void);
 
-GLboolean _glfwSetVideoMode(_GLFWmonitor* monitor, const GLFWvidmode* desired);
+GLFWbool _glfwSetVideoMode(_GLFWmonitor* monitor, const GLFWvidmode* desired);
 void _glfwRestoreVideoMode(_GLFWmonitor* monitor);
 
 #endif // _glfw3_cocoa_platform_h_

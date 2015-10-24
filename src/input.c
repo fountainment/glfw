@@ -1,5 +1,5 @@
 //========================================================================
-// GLFW 3.1 - www.glfw.org
+// GLFW 3.2 - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2002-2006 Marcus Geelnard
 // Copyright (c) 2006-2010 Camilla Berglund <elmindreda@elmindreda.org>
@@ -78,7 +78,7 @@ static void setCursorMode(_GLFWwindow* window, int newMode)
             _glfwPlatformSetCursorPos(window, width / 2, height / 2);
         }
 
-        _glfwPlatformApplyCursorMode(window);
+        _glfwPlatformSetCursorMode(window, window->cursorMode);
     }
 }
 
@@ -135,13 +135,13 @@ void _glfwInputKey(_GLFWwindow* window, int key, int scancode, int action, int m
 {
     if (key >= 0 && key <= GLFW_KEY_LAST)
     {
-        GLboolean repeated = GL_FALSE;
+        GLFWbool repeated = GLFW_FALSE;
 
         if (action == GLFW_RELEASE && window->keys[key] == GLFW_RELEASE)
             return;
 
         if (action == GLFW_PRESS && window->keys[key] == GLFW_PRESS)
-            repeated = GL_TRUE;
+            repeated = GLFW_TRUE;
 
         if (action == GLFW_RELEASE && window->stickyKeys)
             window->keys[key] = _GLFW_STICK;
@@ -259,10 +259,10 @@ GLFWAPI void glfwSetInputMode(GLFWwindow* handle, int mode, int value)
             setCursorMode(window, value);
             break;
         case GLFW_STICKY_KEYS:
-            setStickyKeys(window, value ? GL_TRUE : GL_FALSE);
+            setStickyKeys(window, value ? GLFW_TRUE : GLFW_FALSE);
             break;
         case GLFW_STICKY_MOUSE_BUTTONS:
-            setStickyMouseButtons(window, value ? GL_TRUE : GL_FALSE);
+            setStickyMouseButtons(window, value ? GLFW_TRUE : GLFW_FALSE);
             break;
         default:
             _glfwInputError(GLFW_INVALID_ENUM, "Invalid input mode");

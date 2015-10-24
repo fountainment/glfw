@@ -1,5 +1,5 @@
 //========================================================================
-// GLFW 3.1 POSIX - www.glfw.org
+// GLFW 3.2 POSIX - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2002-2006 Marcus Geelnard
 // Copyright (c) 2006-2010 Camilla Berglund <elmindreda@elmindreda.org>
@@ -38,10 +38,10 @@ int _glfwCreateContextTLS(void)
     {
         _glfwInputError(GLFW_PLATFORM_ERROR,
                         "POSIX: Failed to create context TLS");
-        return GL_FALSE;
+        return GLFW_FALSE;
     }
 
-    return GL_TRUE;
+    return GLFW_TRUE;
 }
 
 void _glfwDestroyContextTLS(void)

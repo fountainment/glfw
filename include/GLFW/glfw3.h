@@ -1,5 +1,5 @@
 /*************************************************************************
- * GLFW 3.1 - www.glfw.org
+ * GLFW 3.2 - www.glfw.org
  * A library for OpenGL, window and input
  *------------------------------------------------------------------------
  * Copyright (c) 2002-2006 Marcus Geelnard
@@ -204,14 +204,32 @@ extern "C" {
  *  backward-compatible.
  *  @ingroup init
  */
-#define GLFW_VERSION_MINOR          1
+#define GLFW_VERSION_MINOR          2
 /*! @brief The revision number of the GLFW library.
  *
  *  This is incremented when a bug fix release is made that does not contain any
  *  API changes.
  *  @ingroup init
  */
-#define GLFW_VERSION_REVISION       2
+#define GLFW_VERSION_REVISION       0
+/*! @} */
+
+/*! @name Boolean values
+ *  @{ */
+/*! @brief One.
+ *
+ *  One.  Seriously.  You don't _need_ to use this symbol in your code.  It's
+ *  just semantic sugar for the number 1.  You can use `1` or `true` or `_True`
+ *  or `GL_TRUE` or whatever you want.
+ */
+#define GLFW_TRUE                   1
+/*! @brief Zero.
+ *
+ *  Zero.  Seriously.  You don't _need_ to use this symbol in your code.  It's
+ *  just just semantic sugar for the number 0.  You can use `0` or `false` or
+ *  `_False` or `GL_FALSE` or whatever you want.
+ */
+#define GLFW_FALSE                  0
 /*! @} */
 
 /*! @name Key and button actions
@@ -801,8 +819,8 @@ typedef void (* GLFWwindowrefreshfun)(GLFWwindow*);
  *  This is the function signature for window focus callback functions.
  *
  *  @param[in] window The window that gained or lost input focus.
- *  @param[in] focused `GL_TRUE` if the window was given input focus, or
- *  `GL_FALSE` if it lost it.
+ *  @param[in] focused `GLFW_TRUE` if the window was given input focus, or
+ *  `GLFW_FALSE` if it lost it.
  *
  *  @sa glfwSetWindowFocusCallback
  *
@@ -816,8 +834,8 @@ typedef void (* GLFWwindowfocusfun)(GLFWwindow*,int);
  *  functions.
  *
  *  @param[in] window The window that was iconified or restored.
- *  @param[in] iconified `GL_TRUE` if the window was iconified, or `GL_FALSE`
- *  if it was restored.
+ *  @param[in] iconified `GLFW_TRUE` if the window was iconified, or
+ *  `GLFW_FALSE` if it was restored.
  *
  *  @sa glfwSetWindowIconifyCallback
  *
@@ -876,8 +894,8 @@ typedef void (* GLFWcursorposfun)(GLFWwindow*,double,double);
  *  This is the function signature for cursor enter/leave callback functions.
  *
  *  @param[in] window The window that received the event.
- *  @param[in] entered `GL_TRUE` if the cursor entered the window's client
- *  area, or `GL_FALSE` if it left it.
+ *  @param[in] entered `GLFW_TRUE` if the cursor entered the window's client
+ *  area, or `GLFW_FALSE` if it left it.
  *
  *  @sa glfwSetCursorEnterCallback
  *
@@ -1057,21 +1075,15 @@ typedef struct GLFWimage
  *  succeeds, you should call @ref glfwTerminate before the application exits.
  *
  *  Additional calls to this function after successful initialization but before
- *  termination will return `GL_TRUE` immediately.
+ *  termination will return `GLFW_TRUE` immediately.
  *
- *  @return `GL_TRUE` if successful, or `GL_FALSE` if an
+ *  @return `GLFW_TRUE` if successful, or `GLFW_FALSE` if an
  *  [error](@ref error_handling) occurred.
  *
  *  @remarks __OS X:__ This function will change the current directory of the
  *  application to the `Contents/Resources` subdirectory of the application's
  *  bundle, if present.  This can be disabled with a
  *  [compile-time option](@ref compile_options_osx).
- *
- *  @remarks __X11:__ If the `LC_CTYPE` category of the current locale is set to
- *  `"C"` then the environment's locale will be applied to that category.  This
- *  is done because character input will not function when `LC_CTYPE` is set to
- *  `"C"`.  If another locale was set before this function was called, it will
- *  be left untouched.
  *
  *  @par Thread Safety
  *  This function may only be called from the main thread.
@@ -1833,6 +1845,77 @@ GLFWAPI void glfwSetWindowPos(GLFWwindow* window, int xpos, int ypos);
  */
 GLFWAPI void glfwGetWindowSize(GLFWwindow* window, int* width, int* height);
 
+/*! @brief Sets the size limits of the specified window.
+ *
+ *  This function sets the size limits of the client area of the specified
+ *  window.  If the window is full screen or not resizable, this function does
+ *  nothing.
+ *
+ *  The size limits are applied immediately and may cause the window to be
+ *  resized.
+ *
+ *  @param[in] window The window to set limits for.
+ *  @param[in] minwidth The minimum width, in screen coordinates, of the client
+ *  area, or `GLFW_DONT_CARE`.
+ *  @param[in] minheight The minimum height, in screen coordinates, of the
+ *  client area, or `GLFW_DONT_CARE`.
+ *  @param[in] maxwidth The maximum width, in screen coordinates, of the client
+ *  area, or `GLFW_DONT_CARE`.
+ *  @param[in] maxheight The maximum height, in screen coordinates, of the
+ *  client area, or `GLFW_DONT_CARE`.
+ *
+ *  @remarks If you set size limits and an aspect ratio that conflict, the
+ *  results are undefined.
+ *
+ *  @par Thread Safety
+ *  This function may only be called from the main thread.
+ *
+ *  @sa @ref window_sizelimits
+ *  @sa glfwSetWindowAspectRatio
+ *
+ *  @since Added in GLFW 3.2.
+ *
+ *  @ingroup window
+ */
+GLFWAPI void glfwSetWindowSizeLimits(GLFWwindow* window, int minwidth, int minheight, int maxwidth, int maxheight);
+
+/*! @brief Sets the aspect ratio of the specified window.
+ *
+ *  This function sets the required aspect ratio of the client area of the
+ *  specified window.  If the window is full screen or not resizable, this
+ *  function does nothing.
+ *
+ *  The aspect ratio is specified as a numerator and a denominator and both
+ *  values must be greater than zero.  For example, the common 16:9 aspect ratio
+ *  is specified as 16 and 9, respectively.
+ *
+ *  If the numerator and denominator is set to `GLFW_DONT_CARE` then the aspect
+ *  ratio limit is disabled.
+ *
+ *  The aspect ratio is applied immediately and may cause the window to be
+ *  resized.
+ *
+ *  @param[in] window The window to set limits for.
+ *  @param[in] numer The numerator of the desired aspect ratio, or
+ *  `GLFW_DONT_CARE`.
+ *  @param[in] denom The denominator of the desired aspect ratio, or
+ *  `GLFW_DONT_CARE`.
+ *
+ *  @remarks If you set size limits and an aspect ratio that conflict, the
+ *  results are undefined.
+ *
+ *  @par Thread Safety
+ *  This function may only be called from the main thread.
+ *
+ *  @sa @ref window_sizelimits
+ *  @sa glfwSetWindowSizeLimits
+ *
+ *  @since Added in GLFW 3.2.
+ *
+ *  @ingroup window
+ */
+GLFWAPI void glfwSetWindowAspectRatio(GLFWwindow* window, int numer, int denom);
+
 /*! @brief Sets the size of the client area of the specified window.
  *
  *  This function sets the size, in screen coordinates, of the client area of
@@ -2426,20 +2509,20 @@ GLFWAPI int glfwGetInputMode(GLFWwindow* window, int mode);
  *    and unlimited cursor movement.  This is useful for implementing for
  *    example 3D camera controls.
  *
- *  If the mode is `GLFW_STICKY_KEYS`, the value must be either `GL_TRUE` to
- *  enable sticky keys, or `GL_FALSE` to disable it.  If sticky keys are
+ *  If the mode is `GLFW_STICKY_KEYS`, the value must be either `GLFW_TRUE` to
+ *  enable sticky keys, or `GLFW_FALSE` to disable it.  If sticky keys are
  *  enabled, a key press will ensure that @ref glfwGetKey returns `GLFW_PRESS`
  *  the next time it is called even if the key had been released before the
  *  call.  This is useful when you are only interested in whether keys have been
  *  pressed but not when or in which order.
  *
  *  If the mode is `GLFW_STICKY_MOUSE_BUTTONS`, the value must be either
- *  `GL_TRUE` to enable sticky mouse buttons, or `GL_FALSE` to disable it.  If
- *  sticky mouse buttons are enabled, a mouse button press will ensure that @ref
- *  glfwGetMouseButton returns `GLFW_PRESS` the next time it is called even if
- *  the mouse button had been released before the call.  This is useful when you
- *  are only interested in whether mouse buttons have been pressed but not when
- *  or in which order.
+ *  `GLFW_TRUE` to enable sticky mouse buttons, or `GLFW_FALSE` to disable it.
+ *  If sticky mouse buttons are enabled, a mouse button press will ensure that
+ *  @ref glfwGetMouseButton returns `GLFW_PRESS` the next time it is called even
+ *  if the mouse button had been released before the call.  This is useful when
+ *  you are only interested in whether mouse buttons have been pressed but not
+ *  when or in which order.
  *
  *  @param[in] window The window whose input mode to set.
  *  @param[in] mode One of `GLFW_CURSOR`, `GLFW_STICKY_KEYS` or
@@ -2963,7 +3046,7 @@ GLFWAPI GLFWdropfun glfwSetDropCallback(GLFWwindow* window, GLFWdropfun cbfun);
  *  This function returns whether the specified joystick is present.
  *
  *  @param[in] joy The [joystick](@ref joysticks) to query.
- *  @return `GL_TRUE` if the joystick is present, or `GL_FALSE` otherwise.
+ *  @return `GLFW_TRUE` if the joystick is present, or `GLFW_FALSE` otherwise.
  *
  *  @par Thread Safety
  *  This function may only be called from the main thread.
@@ -3285,7 +3368,8 @@ GLFWAPI void glfwSwapInterval(int interval);
  *  a context, so there is no danger in doing this.
  *
  *  @param[in] extension The ASCII encoded name of the extension.
- *  @return `GL_TRUE` if the extension is available, or `GL_FALSE` otherwise.
+ *  @return `GLFW_TRUE` if the extension is available, or `GLFW_FALSE`
+ *  otherwise.
  *
  *  @par Thread Safety
  *  This function may be called from any thread.

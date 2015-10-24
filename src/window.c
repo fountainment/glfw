@@ -1,5 +1,5 @@
 //========================================================================
-// GLFW 3.1 - www.glfw.org
+// GLFW 3.2 - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2002-2006 Marcus Geelnard
 // Copyright (c) 2006-2010 Camilla Berglund <elmindreda@elmindreda.org>
@@ -36,7 +36,7 @@
 //////                         GLFW event API                       //////
 //////////////////////////////////////////////////////////////////////////
 
-void _glfwInputWindowFocus(_GLFWwindow* window, GLboolean focused)
+void _glfwInputWindowFocus(_GLFWwindow* window, GLFWbool focused)
 {
     if (focused)
     {
@@ -102,7 +102,7 @@ void _glfwInputWindowDamage(_GLFWwindow* window)
 
 void _glfwInputWindowCloseRequest(_GLFWwindow* window)
 {
-    window->closed = GL_TRUE;
+    window->closed = GLFW_TRUE;
 
     if (window->callbacks.close)
         window->callbacks.close((GLFWwindow*) window);
@@ -144,9 +144,9 @@ GLFWAPI GLFWwindow* glfwCreateWindow(int width, int height,
 
     if (wndconfig.monitor)
     {
-        wndconfig.resizable = GL_TRUE;
-        wndconfig.visible   = GL_TRUE;
-        wndconfig.focused   = GL_TRUE;
+        wndconfig.resizable = GLFW_TRUE;
+        wndconfig.visible   = GLFW_TRUE;
+        wndconfig.focused   = GLFW_TRUE;
     }
 
     // Check the OpenGL bits of the window config
@@ -244,11 +244,11 @@ void glfwDefaultWindowHints(void)
     _glfw.hints.context.minor = 0;
 
     // The default is a focused, visible, resizable window with decorations
-    _glfw.hints.window.resizable   = GL_TRUE;
-    _glfw.hints.window.visible     = GL_TRUE;
-    _glfw.hints.window.decorated   = GL_TRUE;
-    _glfw.hints.window.focused     = GL_TRUE;
-    _glfw.hints.window.autoIconify = GL_TRUE;
+    _glfw.hints.window.resizable   = GLFW_TRUE;
+    _glfw.hints.window.visible     = GLFW_TRUE;
+    _glfw.hints.window.decorated   = GLFW_TRUE;
+    _glfw.hints.window.focused     = GLFW_TRUE;
+    _glfw.hints.window.autoIconify = GLFW_TRUE;
 
     // The default is 24 bits of color, 24 bits of depth and 8 bits of stencil,
     // double buffered
@@ -258,7 +258,7 @@ void glfwDefaultWindowHints(void)
     _glfw.hints.framebuffer.alphaBits    = 8;
     _glfw.hints.framebuffer.depthBits    = 24;
     _glfw.hints.framebuffer.stencilBits  = 8;
-    _glfw.hints.framebuffer.doublebuffer = GL_TRUE;
+    _glfw.hints.framebuffer.doublebuffer = GLFW_TRUE;
 
     // The default is to select the highest available refresh rate
     _glfw.hints.refreshRate = GLFW_DONT_CARE;
@@ -304,34 +304,34 @@ GLFWAPI void glfwWindowHint(int target, int hint)
             _glfw.hints.framebuffer.auxBuffers = hint;
             break;
         case GLFW_STEREO:
-            _glfw.hints.framebuffer.stereo = hint ? GL_TRUE : GL_FALSE;
+            _glfw.hints.framebuffer.stereo = hint ? GLFW_TRUE : GLFW_FALSE;
             break;
         case GLFW_DOUBLEBUFFER:
-            _glfw.hints.framebuffer.doublebuffer = hint ? GL_TRUE : GL_FALSE;
+            _glfw.hints.framebuffer.doublebuffer = hint ? GLFW_TRUE : GLFW_FALSE;
             break;
         case GLFW_SAMPLES:
             _glfw.hints.framebuffer.samples = hint;
             break;
         case GLFW_SRGB_CAPABLE:
-            _glfw.hints.framebuffer.sRGB = hint ? GL_TRUE : GL_FALSE;
+            _glfw.hints.framebuffer.sRGB = hint ? GLFW_TRUE : GLFW_FALSE;
             break;
         case GLFW_RESIZABLE:
-            _glfw.hints.window.resizable = hint ? GL_TRUE : GL_FALSE;
+            _glfw.hints.window.resizable = hint ? GLFW_TRUE : GLFW_FALSE;
             break;
         case GLFW_DECORATED:
-            _glfw.hints.window.decorated = hint ? GL_TRUE : GL_FALSE;
+            _glfw.hints.window.decorated = hint ? GLFW_TRUE : GLFW_FALSE;
             break;
         case GLFW_FOCUSED:
-            _glfw.hints.window.focused = hint ? GL_TRUE : GL_FALSE;
+            _glfw.hints.window.focused = hint ? GLFW_TRUE : GLFW_FALSE;
             break;
         case GLFW_AUTO_ICONIFY:
-            _glfw.hints.window.autoIconify = hint ? GL_TRUE : GL_FALSE;
+            _glfw.hints.window.autoIconify = hint ? GLFW_TRUE : GLFW_FALSE;
             break;
         case GLFW_FLOATING:
-            _glfw.hints.window.floating = hint ? GL_TRUE : GL_FALSE;
+            _glfw.hints.window.floating = hint ? GLFW_TRUE : GLFW_FALSE;
             break;
         case GLFW_VISIBLE:
-            _glfw.hints.window.visible = hint ? GL_TRUE : GL_FALSE;
+            _glfw.hints.window.visible = hint ? GLFW_TRUE : GLFW_FALSE;
             break;
         case GLFW_CLIENT_API:
             _glfw.hints.context.api = hint;
@@ -346,10 +346,10 @@ GLFWAPI void glfwWindowHint(int target, int hint)
             _glfw.hints.context.robustness = hint;
             break;
         case GLFW_OPENGL_FORWARD_COMPAT:
-            _glfw.hints.context.forward = hint ? GL_TRUE : GL_FALSE;
+            _glfw.hints.context.forward = hint ? GLFW_TRUE : GLFW_FALSE;
             break;
         case GLFW_OPENGL_DEBUG_CONTEXT:
-            _glfw.hints.context.debug = hint ? GL_TRUE : GL_FALSE;
+            _glfw.hints.context.debug = hint ? GLFW_TRUE : GLFW_FALSE;
             break;
         case GLFW_OPENGL_PROFILE:
             _glfw.hints.context.profile = hint;
@@ -479,6 +479,40 @@ GLFWAPI void glfwSetWindowSize(GLFWwindow* handle, int width, int height)
     }
 
     _glfwPlatformSetWindowSize(window, width, height);
+}
+
+GLFWAPI void glfwSetWindowSizeLimits(GLFWwindow* handle,
+                                     int minwidth, int minheight,
+                                     int maxwidth, int maxheight)
+{
+    _GLFWwindow* window = (_GLFWwindow*) handle;
+
+    _GLFW_REQUIRE_INIT();
+
+    if (window->monitor || !window->resizable)
+        return;
+
+    _glfwPlatformSetWindowSizeLimits(window,
+                                     minwidth, minheight,
+                                     maxwidth, maxheight);
+}
+
+GLFWAPI void glfwSetWindowAspectRatio(GLFWwindow* handle, int numer, int denom)
+{
+    _GLFWwindow* window = (_GLFWwindow*) handle;
+
+    _GLFW_REQUIRE_INIT();
+
+    if (window->monitor || !window->resizable)
+        return;
+
+    if (!denom)
+    {
+        _glfwInputError(GLFW_INVALID_VALUE, "Denominator cannot be zero");
+        return;
+    }
+
+    _glfwPlatformSetWindowAspectRatio(window, numer, denom);
 }
 
 GLFWAPI void glfwGetFramebufferSize(GLFWwindow* handle, int* width, int* height)

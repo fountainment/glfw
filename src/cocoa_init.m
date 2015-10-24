@@ -1,5 +1,5 @@
 //========================================================================
-// GLFW 3.1 OS X - www.glfw.org
+// GLFW 3.2 OS X - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2009-2010 Camilla Berglund <elmindreda@elmindreda.org>
 //
@@ -207,17 +207,17 @@ int _glfwPlatformInit(void)
 
     _glfw.ns.eventSource = CGEventSourceCreate(kCGEventSourceStateHIDSystemState);
     if (!_glfw.ns.eventSource)
-        return GL_FALSE;
+        return GLFW_FALSE;
 
     CGEventSourceSetLocalEventsSuppressionInterval(_glfw.ns.eventSource, 0.0);
 
     if (!_glfwInitContextAPI())
-        return GL_FALSE;
+        return GLFW_FALSE;
 
     _glfwInitTimer();
     _glfwInitJoysticks();
 
-    return GL_TRUE;
+    return GLFW_TRUE;
 }
 
 void _glfwPlatformTerminate(void)

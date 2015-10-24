@@ -1,5 +1,5 @@
 //========================================================================
-// GLFW 3.1 IOKit - www.glfw.org
+// GLFW 3.2 IOKit - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2009-2010 Camilla Berglund <elmindreda@elmindreda.org>
 // Copyright (c) 2012 Torsten Walluhn <tw@mad-cad.net>
@@ -286,7 +286,7 @@ static void matchCallback(void* context,
     if (joy > GLFW_JOYSTICK_LAST)
         return;
 
-    joystick->present = GL_TRUE;
+    joystick->present = GLFW_TRUE;
     joystick->deviceRef = deviceRef;
 
     CFStringRef name = IOHIDDeviceGetProperty(deviceRef,
@@ -352,7 +352,7 @@ static CFMutableDictionaryRef createMatchingDictionary(long usagePage,
     if (result)
     {
         CFNumberRef pageRef = CFNumberCreate(kCFAllocatorDefault,
-                                             kCFNumberIntType,
+                                             kCFNumberLongType,
                                              &usagePage);
         if (pageRef)
         {
@@ -362,7 +362,7 @@ static CFMutableDictionaryRef createMatchingDictionary(long usagePage,
             CFRelease(pageRef);
 
             CFNumberRef usageRef = CFNumberCreate(kCFAllocatorDefault,
-                                                  kCFNumberIntType,
+                                                  kCFNumberLongType,
                                                   &usage);
             if (usageRef)
             {
@@ -421,11 +421,11 @@ void _glfwInitJoysticks(void)
             CFArrayAppendValue(matchingCFArrayRef, matchingCFDictRef);
             CFRelease(matchingCFDictRef);
         }
-    }
 
-    IOHIDManagerSetDeviceMatchingMultiple(_glfw.iokit_js.managerRef,
-                                          matchingCFArrayRef);
-    CFRelease(matchingCFArrayRef);
+        IOHIDManagerSetDeviceMatchingMultiple(_glfw.iokit_js.managerRef,
+                                              matchingCFArrayRef);
+        CFRelease(matchingCFArrayRef);
+    }
 
     IOHIDManagerRegisterDeviceMatchingCallback(_glfw.iokit_js.managerRef,
                                                &matchCallback, NULL);

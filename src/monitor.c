@@ -1,5 +1,5 @@
 //========================================================================
-// GLFW 3.1 - www.glfw.org
+// GLFW 3.2 - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2002-2006 Marcus Geelnard
 // Copyright (c) 2006-2010 Camilla Berglund <elmindreda@elmindreda.org>
@@ -60,17 +60,17 @@ static int compareVideoModes(const void* firstPtr, const void* secondPtr)
 
 // Retrieves the available modes for the specified monitor
 //
-static int refreshVideoModes(_GLFWmonitor* monitor)
+static GLFWbool refreshVideoModes(_GLFWmonitor* monitor)
 {
     int modeCount;
     GLFWvidmode* modes;
 
     if (monitor->modes)
-        return GL_TRUE;
+        return GLFW_TRUE;
 
     modes = _glfwPlatformGetVideoModes(monitor, &modeCount);
     if (!modes)
-        return GL_FALSE;
+        return GLFW_FALSE;
 
     qsort(modes, modeCount, sizeof(GLFWvidmode), compareVideoModes);
 
@@ -78,7 +78,7 @@ static int refreshVideoModes(_GLFWmonitor* monitor)
     monitor->modes = modes;
     monitor->modeCount = modeCount;
 
-    return GL_TRUE;
+    return GLFW_TRUE;
 }
 
 
