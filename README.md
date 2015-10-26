@@ -45,10 +45,13 @@ This will help both us and other people experiencing the same bug.
 
 ## Dependencies
 
-GLFW bundles a number of dependencies in the `deps/` directory.
+GLFW itself needs only the headers and libraries for your window system.  It
+does not need the headers for any context creation API (WGL, GLX, EGL, NSGL) or
+client API (OpenGL, OpenGL ES) to enable support for them.
 
- - [Khronos extension headers](https://www.opengl.org/registry/) for API
-   extension symbols used by GLFW
+GLFW bundles a number of dependencies in the `deps/` directory.  These are only
+used by the tests and examples and are not required to build the library.
+
  - [getopt\_port](https://github.com/kimgr/getopt_port/) for examples
    with command-line options
  - [TinyCThread](https://github.com/tinycthread/tinycthread) for threaded
@@ -63,9 +66,11 @@ GLFW bundles a number of dependencies in the `deps/` directory.
 
  - Added `glfwSetWindowSizeLimits` and `glfwSetWindowAspectRatio` for setting
    absolute and relative window size limits
+ - Added `GLFW_NO_API` for creating window without contexts
  - Added `GLFW_TRUE` and `GLFW_FALSE` as client API independent boolean values
  - Removed dependency on external OpenGL or OpenGL ES headers
  - [Cocoa] Removed support for OS X 10.6
+ - [X11] Bugfix: Monitor connection and disconnection events were not reported
  - [WGL] Removed dependency on external WGL headers
  - [GLX] Removed dependency on external GLX headers
  - [EGL] Removed dependency on external EGL headers

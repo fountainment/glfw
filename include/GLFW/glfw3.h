@@ -38,6 +38,14 @@ extern "C" {
  * Doxygen documentation
  *************************************************************************/
 
+/*! @file glfw3.h
+ *  @brief The header of the GLFW 3 API.
+ *
+ *  This is the header file of the GLFW 3 API.  It defines all its types and
+ *  declares all its functions.
+ *
+ *  For more information about how to use this file, see @ref build_include.
+ */
 /*! @defgroup context Context handling
  *
  *  This is the reference documentation for context related functions.  For more
@@ -605,6 +613,15 @@ extern "C" {
  *  the user, as appropriate.
  */
 #define GLFW_FORMAT_UNAVAILABLE     0x00010009
+/*! @brief The specified window does not have an OpenGL or OpenGL ES context.
+ *
+ *  A window that does not have an OpenGL or OpenGL ES context was passed to
+ *  a function that requires it to have one.
+ *
+ *  @par Analysis
+ *  Application programmer error.  Fix the offending call.
+ */
+#define GLFW_NO_WINDOW_CONTEXT      0x0001000A
 /*! @} */
 
 #define GLFW_FOCUSED                0x00020001
@@ -642,6 +659,7 @@ extern "C" {
 #define GLFW_OPENGL_PROFILE         0x00022008
 #define GLFW_CONTEXT_RELEASE_BEHAVIOR 0x00022009
 
+#define GLFW_NO_API                          0
 #define GLFW_OPENGL_API             0x00030001
 #define GLFW_OPENGL_ES_API          0x00030002
 
@@ -1365,9 +1383,6 @@ GLFWAPI const char* glfwGetMonitorName(GLFWmonitor* monitor);
  *  callback.
  *  @return The previously set callback, or `NULL` if no callback was set or the
  *  library had not been [initialized](@ref intro_init).
- *
- *  @bug __X11:__ This callback is not yet called on monitor configuration
- *  changes.
  *
  *  @par Thread Safety
  *  This function may only be called from the main thread.

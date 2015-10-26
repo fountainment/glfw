@@ -142,6 +142,15 @@ GLFWAPI GLFWwindow* glfwCreateWindow(int width, int height,
     wndconfig.monitor = (_GLFWmonitor*) monitor;
     ctxconfig.share   = (_GLFWwindow*) share;
 
+    if (ctxconfig.share)
+    {
+        if (ctxconfig.share->context.api == GLFW_NO_API)
+        {
+            _glfwInputError(GLFW_NO_WINDOW_CONTEXT, NULL);
+            return NULL;
+        }
+    }
+
     if (wndconfig.monitor)
     {
         wndconfig.resizable = GLFW_TRUE;
@@ -149,7 +158,6 @@ GLFWAPI GLFWwindow* glfwCreateWindow(int width, int height,
         wndconfig.focused   = GLFW_TRUE;
     }
 
-    // Check the OpenGL bits of the window config
     if (!_glfwIsValidContextConfig(&ctxconfig))
         return NULL;
 
@@ -182,31 +190,29 @@ GLFWAPI GLFWwindow* glfwCreateWindow(int width, int height,
         return NULL;
     }
 
-    _glfwPlatformMakeContextCurrent(window);
-
-    // Retrieve the actual (as opposed to requested) context attributes
-    if (!_glfwRefreshContextAttribs(&ctxconfig))
+    if (ctxconfig.api != GLFW_NO_API)
     {
-        glfwDestroyWindow((GLFWwindow*) window);
+        _glfwPlatformMakeContextCurrent(window);
+
+        // Retrieve the actual (as opposed to requested) context attributes
+        if (!_glfwRefreshContextAttribs(&ctxconfig))
+        {
+            glfwDestroyWindow((GLFWwindow*) window);
+            _glfwPlatformMakeContextCurrent(previous);
+            return NULL;
+        }
+
+        // Verify the context against the requested parameters
+        if (!_glfwIsValidContext(&ctxconfig))
+        {
+            glfwDestroyWindow((GLFWwindow*) window);
+            _glfwPlatformMakeContextCurrent(previous);
+            return NULL;
+        }
+
+        // Restore the previously current context (or NULL)
         _glfwPlatformMakeContextCurrent(previous);
-        return NULL;
     }
-
-    // Verify the context against the requested parameters
-    if (!_glfwIsValidContext(&ctxconfig))
-    {
-        glfwDestroyWindow((GLFWwindow*) window);
-        _glfwPlatformMakeContextCurrent(previous);
-        return NULL;
-    }
-
-    // Clearing the front buffer to black to avoid garbage pixels left over
-    // from previous uses of our bit of VRAM
-    window->Clear(GL_COLOR_BUFFER_BIT);
-    _glfwPlatformSwapBuffers(window);
-
-    // Restore the previously current context (or NULL)
-    _glfwPlatformMakeContextCurrent(previous);
 
     if (wndconfig.monitor)
     {

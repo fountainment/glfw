@@ -271,7 +271,6 @@ struct _GLFWwindow
     PFNGLGETSTRINGIPROC GetStringi;
     PFNGLGETINTEGERVPROC GetIntegerv;
     PFNGLGETSTRINGPROC  GetString;
-    PFNGLCLEARPROC      Clear;
 
     struct {
         GLFWwindowposfun        pos;
@@ -784,7 +783,11 @@ void _glfwInputMonitorChange(void);
  *  description.
  *  @ingroup event
  */
+#if defined(__GNUC__)
+void _glfwInputError(int error, const char* format, ...) __attribute__((format(printf, 2, 3)));
+#else
 void _glfwInputError(int error, const char* format, ...);
+#endif
 
 /*! @brief Notifies dropped object over window.
  *  @param[in] window The window that received the event.
