@@ -39,7 +39,27 @@
  #define _glfw_dlsym(handle, name) dlsym(handle, name)
 #endif
 
-#include <EGL/eglplatform.h>
+#if defined(_GLFW_USE_EGLPLATFORM_H)
+ #include <EGL/eglplatform.h>
+#elif defined(_GLFW_WIN32)
+ #define EGLAPIENTRY __stdcall
+typedef HDC EGLNativeDisplayType;
+typedef HWND EGLNativeWindowType;
+#elif defined(_GLFW_X11)
+ #define EGLAPIENTRY
+typedef Display* EGLNativeDisplayType;
+typedef Window EGLNativeWindowType;
+#elif defined(_GLFW_WAYLAND)
+ #define EGLAPIENTRY
+typedef struct wl_display* EGLNativeDisplayType;
+typedef struct wl_egl_window* EGLNativeWindowType;
+#elif defined(_GLFW_MIR)
+ #define EGLAPIENTRY
+typedef MirEGLNativeDisplayType EGLNativeDisplayType;
+typedef MirEGLNativeWindowType EGLNativeWindowType;
+#else
+ #error "No supported EGL platform selected"
+#endif
 
 #define EGL_SUCCESS	0x3000
 #define EGL_NOT_INITIALIZED	0x3001
@@ -88,11 +108,13 @@
 #define EGL_CONTEXT_MINOR_VERSION_KHR 0x30fb
 #define EGL_CONTEXT_OPENGL_PROFILE_MASK_KHR 0x30FD
 #define EGL_CONTEXT_FLAGS_KHR 0x30fc
+#define EGL_CONTEXT_OPENGL_NO_ERROR_KHR 0x31b3
 #define EGL_NATIVE_VISUAL_ID 0x302e
 #define EGL_NO_SURFACE ((EGLSurface) 0)
 #define EGL_NO_DISPLAY ((EGLDisplay) 0)
 #define EGL_NO_CONTEXT ((EGLContext) 0)
 
+typedef int EGLint;
 typedef unsigned int EGLBoolean;
 typedef unsigned int EGLenum;
 typedef void* EGLConfig;
@@ -144,7 +166,7 @@ typedef GLFWglproc (EGLAPIENTRY * PFNEGLGETPROCADDRESSPROC)(const char*);
 typedef struct _GLFWcontextEGL
 {
    EGLConfig        config;
-   EGLContext       context;
+   EGLContext       handle;
    EGLSurface       surface;
 
    void*            client;
@@ -160,6 +182,7 @@ typedef struct _GLFWlibraryEGL
     EGLint          major, minor;
 
     GLFWbool        KHR_create_context;
+    GLFWbool        KHR_create_context_no_error;
 
     void*           handle;
 
@@ -189,11 +212,6 @@ int _glfwCreateContext(_GLFWwindow* window,
                        const _GLFWctxconfig* ctxconfig,
                        const _GLFWfbconfig* fbconfig);
 void _glfwDestroyContext(_GLFWwindow* window);
-#if defined(_GLFW_WIN32)
-int _glfwAnalyzeContext(const _GLFWwindow* window,
-                        const _GLFWctxconfig* ctxconfig,
-                        const _GLFWfbconfig* fbconfig);
-#endif /*_GLFW_WIN32*/
 #if defined(_GLFW_X11)
 GLFWbool _glfwChooseVisual(const _GLFWctxconfig* ctxconfig,
                            const _GLFWfbconfig* fbconfig,

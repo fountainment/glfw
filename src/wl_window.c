@@ -238,14 +238,14 @@ int _glfwPlatformCreateWindow(_GLFWwindow* window,
                               const _GLFWctxconfig* ctxconfig,
                               const _GLFWfbconfig* fbconfig)
 {
+    if (!createSurface(window, wndconfig))
+        return GLFW_FALSE;
+
     if (ctxconfig->api != GLFW_NO_API)
     {
         if (!_glfwCreateContext(window, ctxconfig, fbconfig))
             return GLFW_FALSE;
     }
-
-    if (!createSurface(window, wndconfig))
-        return GLFW_FALSE;
 
     if (wndconfig->monitor)
     {
@@ -436,6 +436,12 @@ void _glfwPlatformSetCursorMode(_GLFWwindow* window, int mode)
     _glfwPlatformSetCursor(window, window->wl.currentCursor);
 }
 
+const char* _glfwPlatformGetKeyName(int key, int scancode)
+{
+    // TODO
+    return NULL;
+}
+
 int _glfwPlatformCreateCursor(_GLFWcursor* cursor,
                               const GLFWimage* image,
                               int xhot, int yhot)
@@ -516,7 +522,8 @@ void _glfwPlatformDestroyCursor(_GLFWcursor* cursor)
     if (cursor->wl.image)
         return;
 
-    wl_buffer_destroy(cursor->wl.buffer);
+    if (cursor->wl.buffer)
+        wl_buffer_destroy(cursor->wl.buffer);
 }
 
 void _glfwPlatformSetCursor(_GLFWwindow* window, _GLFWcursor* cursor)

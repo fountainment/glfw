@@ -66,13 +66,23 @@ used by the tests and examples and are not required to build the library.
 
  - Added `glfwSetWindowSizeLimits` and `glfwSetWindowAspectRatio` for setting
    absolute and relative window size limits
+ - Added `glfwGetKeyName` for querying the layout-specific name of printable
+   keys
  - Added `GLFW_NO_API` for creating window without contexts
+ - Added `GLFW_CONTEXT_NO_ERROR` context hint for `GL_KHR_no_error` support
  - Added `GLFW_TRUE` and `GLFW_FALSE` as client API independent boolean values
+ - Added `glfwGetGLXWindow` to query the `GLXWindow` of a window
+ - Relaxed rules for native access header macros
  - Removed dependency on external OpenGL or OpenGL ES headers
+ - [Win32] Added support for Windows 8.1 per-monitor DPI
  - [Cocoa] Removed support for OS X 10.6
  - [X11] Bugfix: Monitor connection and disconnection events were not reported
+ - [X11] Bugfix: Decoding of UTF-8 text from XIM could continue past the end
+ - [POSIX] Bugfix: An unrelated TLS key could be deleted by `glfwTerminate`
  - [WGL] Removed dependency on external WGL headers
+ - [GLX] Replaced legacy renderable with `GLXWindow`
  - [GLX] Removed dependency on external GLX headers
+ - [GLX] Bugfix: NetBSD does not provide `libGL.so.1`
  - [EGL] Removed dependency on external EGL headers
 
 
@@ -118,6 +128,7 @@ skills.
  - Olivier Delannoy
  - Paul R. Deppe
  - Michael Dickens
+ - Роман Донченко
  - Jonathan Dummer
  - Ralph Eastwood
  - Siavash Eliasi

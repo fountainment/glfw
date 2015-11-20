@@ -156,7 +156,7 @@ void _glfwInputKey(_GLFWwindow* window, int key, int scancode, int action, int m
         window->callbacks.key((GLFWwindow*) window, key, scancode, action, mods);
 }
 
-void _glfwInputChar(_GLFWwindow* window, unsigned int codepoint, int mods, int plain)
+void _glfwInputChar(_GLFWwindow* window, unsigned int codepoint, int mods, GLFWbool plain)
 {
     if (codepoint < 32 || (codepoint > 126 && codepoint < 160))
         return;
@@ -210,7 +210,7 @@ void _glfwInputCursorMotion(_GLFWwindow* window, double x, double y)
         window->callbacks.cursorPos((GLFWwindow*) window, x, y);
 }
 
-void _glfwInputCursorEnter(_GLFWwindow* window, int entered)
+void _glfwInputCursorEnter(_GLFWwindow* window, GLFWbool entered)
 {
     if (window->callbacks.cursorEnter)
         window->callbacks.cursorEnter((GLFWwindow*) window, entered);
@@ -220,6 +220,18 @@ void _glfwInputDrop(_GLFWwindow* window, int count, const char** paths)
 {
     if (window->callbacks.drop)
         window->callbacks.drop((GLFWwindow*) window, count, paths);
+}
+
+
+//////////////////////////////////////////////////////////////////////////
+//////                       GLFW internal API                      //////
+//////////////////////////////////////////////////////////////////////////
+
+GLFWbool _glfwIsPrintable(int key)
+{
+    return (key >= GLFW_KEY_APOSTROPHE && key <= GLFW_KEY_WORLD_2) ||
+           (key >= GLFW_KEY_KP_0 && key <= GLFW_KEY_KP_ADD) ||
+           key == GLFW_KEY_KP_EQUAL;
 }
 
 
@@ -268,6 +280,12 @@ GLFWAPI void glfwSetInputMode(GLFWwindow* handle, int mode, int value)
             _glfwInputError(GLFW_INVALID_ENUM, "Invalid input mode");
             break;
     }
+}
+
+GLFWAPI const char* glfwGetKeyName(int key, int scancode)
+{
+    _GLFW_REQUIRE_INIT_OR_RETURN(NULL);
+    return _glfwPlatformGetKeyName(key, scancode);
 }
 
 GLFWAPI int glfwGetKey(GLFWwindow* handle, int key)

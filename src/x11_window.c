@@ -896,17 +896,17 @@ static void processEvent(XEvent *event)
                     int count;
                     Status status;
 #if defined(X_HAVE_UTF8_STRING)
-                    char buffer[96];
+                    char buffer[100];
                     char* chars = buffer;
 
                     count = Xutf8LookupString(window->x11.ic,
                                               &event->xkey,
-                                              buffer, sizeof(buffer),
+                                              buffer, sizeof(buffer) - 1,
                                               NULL, &status);
 
                     if (status == XBufferOverflow)
                     {
-                        chars = calloc(count, 1);
+                        chars = calloc(count + 1, 1);
                         count = Xutf8LookupString(window->x11.ic,
                                                   &event->xkey,
                                                   chars, count,
@@ -916,6 +916,7 @@ static void processEvent(XEvent *event)
                     if (status == XLookupChars || status == XLookupBoth)
                     {
                         const char* c = chars;
+                        chars[count] = '\0';
                         while (c - chars < count)
                             _glfwInputChar(window, decodeUTF8(&c), mods, plain);
                     }
@@ -1936,6 +1937,34 @@ void _glfwPlatformSetCursorMode(_GLFWwindow* window, int mode)
                           _glfw.x11.cursor);
         }
     }
+}
+
+const char* _glfwPlatformGetKeyName(int key, int scancode)
+{
+    KeySym keysym;
+    int extra;
+
+    if (!_glfw.x11.xkb.available)
+        return NULL;
+
+    if (key != GLFW_KEY_UNKNOWN)
+        scancode = _glfw.x11.nativeKeys[key];
+
+    if (!_glfwIsPrintable(_glfw.x11.publicKeys[scancode]))
+        return NULL;
+
+    keysym = XkbKeycodeToKeysym(_glfw.x11.display, scancode, 0, 0);
+    if (keysym == NoSymbol)
+      return NULL;
+
+    XkbTranslateKeySym(_glfw.x11.display, &keysym, 0,
+                       _glfw.x11.keyName, sizeof(_glfw.x11.keyName),
+                       &extra);
+
+    if (!strlen(_glfw.x11.keyName))
+        return NULL;
+
+    return _glfw.x11.keyName;
 }
 
 int _glfwPlatformCreateCursor(_GLFWcursor* cursor,

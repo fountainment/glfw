@@ -33,8 +33,6 @@
  #include "glfw_config.h"
 #endif
 
-#define _GLFW_VERSION_NUMBER "3.2.0"
-
 #if defined(GLFW_INCLUDE_GLCOREARB) || \
     defined(GLFW_INCLUDE_ES1)       || \
     defined(GLFW_INCLUDE_ES2)       || \
@@ -65,6 +63,7 @@
 #define GL_NO_RESET_NOTIFICATION_ARB 0x8261
 #define GL_CONTEXT_RELEASE_BEHAVIOR 0x82fb
 #define GL_CONTEXT_RELEASE_BEHAVIOR_FLUSH 0x82fc
+#define GL_CONTEXT_FLAG_NO_ERROR_BIT_KHR 0x00000008
 
 typedef int	GLint;
 typedef unsigned int GLuint;
@@ -80,6 +79,7 @@ typedef const GLubyte* (APIENTRY * PFNGLGETSTRINGIPROC)(GLenum,GLuint);
 typedef struct _GLFWwndconfig   _GLFWwndconfig;
 typedef struct _GLFWctxconfig   _GLFWctxconfig;
 typedef struct _GLFWfbconfig    _GLFWfbconfig;
+typedef struct _GLFWcontext     _GLFWcontext;
 typedef struct _GLFWwindow      _GLFWwindow;
 typedef struct _GLFWlibrary     _GLFWlibrary;
 typedef struct _GLFWmonitor     _GLFWmonitor;
@@ -132,6 +132,13 @@ typedef int GLFWbool;
 //========================================================================
 // Helper macros
 //========================================================================
+
+// Constructs a version number string from the public header macros
+#define _GLFW_CONCAT_VERSION(m, n, r) #m "." #n "." #r
+#define _GLFW_MAKE_VERSION(m, n, r) _GLFW_CONCAT_VERSION(m, n, r)
+#define _GLFW_VERSION_NUMBER _GLFW_MAKE_VERSION(GLFW_VERSION_MAJOR, \
+                                                GLFW_VERSION_MINOR, \
+                                                GLFW_VERSION_REVISION)
 
 // Checks for whether the library has been initialized
 #define _GLFW_REQUIRE_INIT()                         \
@@ -195,6 +202,7 @@ struct _GLFWctxconfig
     int           minor;
     GLFWbool      forward;
     GLFWbool      debug;
+    GLFWbool      noerror;
     int           profile;
     int           robustness;
     int           release;
@@ -233,6 +241,26 @@ struct _GLFWfbconfig
 };
 
 
+/*! @brief Context structure.
+ */
+struct _GLFWcontext
+{
+    int                 api;
+    int                 major, minor, revision;
+    GLFWbool            forward, debug, noerror;
+    int                 profile;
+    int                 robustness;
+    int                 release;
+
+    PFNGLGETSTRINGIPROC GetStringi;
+    PFNGLGETINTEGERVPROC GetIntegerv;
+    PFNGLGETSTRINGPROC  GetString;
+
+    // This is defined in the context API's context.h
+    _GLFW_PLATFORM_CONTEXT_STATE;
+};
+
+
 /*! @brief Window and context structure.
  */
 struct _GLFWwindow
@@ -258,19 +286,7 @@ struct _GLFWwindow
     char                mouseButtons[GLFW_MOUSE_BUTTON_LAST + 1];
     char                keys[GLFW_KEY_LAST + 1];
 
-    // OpenGL extensions and context attributes
-    struct {
-        int             api;
-        int             major, minor, revision;
-        GLFWbool        forward, debug;
-        int             profile;
-        int             robustness;
-        int             release;
-    } context;
-
-    PFNGLGETSTRINGIPROC GetStringi;
-    PFNGLGETINTEGERVPROC GetIntegerv;
-    PFNGLGETSTRINGPROC  GetString;
+    _GLFWcontext        context;
 
     struct {
         GLFWwindowposfun        pos;
@@ -292,8 +308,6 @@ struct _GLFWwindow
 
     // This is defined in the window API's platform.h
     _GLFW_PLATFORM_WINDOW_STATE;
-    // This is defined in the context API's context.h
-    _GLFW_PLATFORM_CONTEXT_STATE;
 };
 
 
@@ -420,6 +434,11 @@ void _glfwPlatformSetCursorPos(_GLFWwindow* window, double xpos, double ypos);
  *  @ingroup platform
  */
 void _glfwPlatformSetCursorMode(_GLFWwindow* window, int mode);
+
+/*! @copydoc glfwGetKeyName
+ *  @ingroup platform
+ */
+const char* _glfwPlatformGetKeyName(int key, int scancode);
 
 /*! @copydoc glfwGetMonitors
  *  @ingroup platform
@@ -706,7 +725,7 @@ void _glfwInputFramebufferSize(_GLFWwindow* window, int width, int height);
  *  `GLFW_FALSE` if it was restored.
  *  @ingroup event
  */
-void _glfwInputWindowIconify(_GLFWwindow* window, int iconified);
+void _glfwInputWindowIconify(_GLFWwindow* window, GLFWbool iconified);
 
 /*! @brief Notifies shared code of a window damage event.
  *  @param[in] window The window that received the event.
@@ -737,7 +756,7 @@ void _glfwInputKey(_GLFWwindow* window, int key, int scancode, int action, int m
  *  `GLFW_FALSE` otherwise.
  *  @ingroup event
  */
-void _glfwInputChar(_GLFWwindow* window, unsigned int codepoint, int mods, int plain);
+void _glfwInputChar(_GLFWwindow* window, unsigned int codepoint, int mods, GLFWbool plain);
 
 /*! @brief Notifies shared code of a scroll event.
  *  @param[in] window The window that received the event.
@@ -771,7 +790,7 @@ void _glfwInputCursorMotion(_GLFWwindow* window, double x, double y);
  *  window, or `GLFW_FALSE` if it left it.
  *  @ingroup event
  */
-void _glfwInputCursorEnter(_GLFWwindow* window, int entered);
+void _glfwInputCursorEnter(_GLFWwindow* window, GLFWbool entered);
 
 /*! @ingroup event
  */
@@ -823,7 +842,7 @@ void _glfwSplitBPP(int bpp, int* red, int* green, int* blue);
  *  @return `GLFW_TRUE` if the extension was found, or `GLFW_FALSE` otherwise.
  *  @ingroup utility
  */
-int _glfwStringInExtensionString(const char* string, const char* extensions);
+GLFWbool _glfwStringInExtensionString(const char* string, const char* extensions);
 
 /*! @brief Chooses the framebuffer config that best matches the desired one.
  *  @param[in] desired The desired framebuffer config.
@@ -892,5 +911,9 @@ void _glfwFreeMonitor(_GLFWmonitor* monitor);
 /*! @ingroup utility
   */
 void _glfwFreeMonitors(_GLFWmonitor** monitors, int count);
+
+/*! @ingroup utility
+ */
+int _glfwIsPrintable(int key);
 
 #endif // _glfw3_internal_h_

@@ -160,7 +160,8 @@ static int translateKey(unsigned int key)
 
 - (void)windowDidResize:(NSNotification *)notification
 {
-    [window->nsgl.context update];
+    if (window->context.api != GLFW_NO_API)
+        [window->context.nsgl.object update];
 
     if (_glfw.cursorWindow == window &&
         window->cursorMode == GLFW_CURSOR_DISABLED)
@@ -177,7 +178,8 @@ static int translateKey(unsigned int key)
 
 - (void)windowDidMove:(NSNotification *)notification
 {
-    [window->nsgl.context update];
+    if (window->context.api != GLFW_NO_API)
+        [window->context.nsgl.object update];
 
     if (_glfw.cursorWindow == window &&
         window->cursorMode == GLFW_CURSOR_DISABLED)
@@ -1166,6 +1168,48 @@ void _glfwPlatformSetCursorMode(_GLFWwindow* window, int mode)
         CGAssociateMouseAndMouseCursorPosition(false);
     else
         CGAssociateMouseAndMouseCursorPosition(true);
+}
+
+const char* _glfwPlatformGetKeyName(int key, int scancode)
+{
+    if (key != GLFW_KEY_UNKNOWN)
+        scancode = _glfw.ns.nativeKeys[key];
+
+    if (!_glfwIsPrintable(_glfw.ns.publicKeys[scancode]))
+        return NULL;
+
+    UInt32 deadKeyState = 0;
+    UniChar characters[8];
+    UniCharCount characterCount = 0;
+
+    if (UCKeyTranslate([(NSData*) _glfw.ns.unicodeData bytes],
+                       scancode,
+                       kUCKeyActionDisplay,
+                       0,
+                       LMGetKbdType(),
+                       kUCKeyTranslateNoDeadKeysBit,
+                       &deadKeyState,
+                       sizeof(characters) / sizeof(characters[0]),
+                       &characterCount,
+                       characters) != noErr)
+    {
+        return NULL;
+    }
+
+    if (!characterCount)
+        return NULL;
+
+    CFStringRef string = CFStringCreateWithCharactersNoCopy(kCFAllocatorDefault,
+                                                            characters,
+                                                            characterCount,
+                                                            kCFAllocatorNull);
+    CFStringGetCString(string,
+                       _glfw.ns.keyName,
+                       sizeof(_glfw.ns.keyName),
+                       kCFStringEncodingUTF8);
+    CFRelease(string);
+
+    return _glfw.ns.keyName;
 }
 
 int _glfwPlatformCreateCursor(_GLFWcursor* cursor,

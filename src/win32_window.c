@@ -37,7 +37,6 @@
 
 #define _GLFW_WNDCLASSNAME L"GLFW30"
 
-
 // Returns the window style for the specified window
 //
 static DWORD getWindowStyle(const _GLFWwindow* window)
@@ -250,7 +249,7 @@ static void leaveFullscreenMode(_GLFWwindow* window)
     _glfwRestoreVideoMode(window->monitor);
 }
 
-// Window callback function (handles window events)
+// Window callback function (handles window messages)
 //
 static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
                                    WPARAM wParam, LPARAM lParam)
@@ -317,69 +316,52 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
             return 0;
         }
 
-        case WM_KEYDOWN:
-        case WM_SYSKEYDOWN:
-        {
-            const int scancode = (lParam >> 16) & 0x1ff;
-            const int key = translateKey(wParam, lParam);
-            if (key == _GLFW_KEY_INVALID)
-                break;
-
-            _glfwInputKey(window, key, scancode, GLFW_PRESS, getKeyMods());
-            break;
-        }
-
         case WM_CHAR:
-        {
-            _glfwInputChar(window, (unsigned int) wParam, getKeyMods(), GLFW_TRUE);
-            return 0;
-        }
-
         case WM_SYSCHAR:
-        {
-            _glfwInputChar(window, (unsigned int) wParam, getKeyMods(), GLFW_FALSE);
-            return 0;
-        }
-
         case WM_UNICHAR:
         {
-            // This message is not sent by Windows, but is sent by some
-            // third-party input method engines
+            const GLFWbool plain = (uMsg != WM_SYSCHAR);
 
-            if (wParam == UNICODE_NOCHAR)
+            if (uMsg == WM_UNICHAR && wParam == UNICODE_NOCHAR)
             {
+                // WM_UNICHAR is not sent by Windows, but is sent by some
+                // third-party input method engine
                 // Returning TRUE here announces support for this message
                 return TRUE;
             }
 
-            _glfwInputChar(window, (unsigned int) wParam, getKeyMods(), GLFW_TRUE);
-            return FALSE;
+            _glfwInputChar(window, (unsigned int) wParam, getKeyMods(), plain);
+            return 0;
         }
 
+        case WM_KEYDOWN:
+        case WM_SYSKEYDOWN:
         case WM_KEYUP:
         case WM_SYSKEYUP:
         {
-            const int mods = getKeyMods();
-            const int scancode = (lParam >> 16) & 0x1ff;
             const int key = translateKey(wParam, lParam);
+            const int scancode = (lParam >> 16) & 0x1ff;
+            const int action = ((lParam >> 31) & 1) ? GLFW_RELEASE : GLFW_PRESS;
+            const int mods = getKeyMods();
+
             if (key == _GLFW_KEY_INVALID)
                 break;
 
-            if (wParam == VK_SHIFT)
+            if (action == GLFW_RELEASE && wParam == VK_SHIFT)
             {
                 // Release both Shift keys on Shift up event, as only one event
                 // is sent even if both keys are released
-                _glfwInputKey(window, GLFW_KEY_LEFT_SHIFT, scancode, GLFW_RELEASE, mods);
-                _glfwInputKey(window, GLFW_KEY_RIGHT_SHIFT, scancode, GLFW_RELEASE, mods);
+                _glfwInputKey(window, GLFW_KEY_LEFT_SHIFT, scancode, action, mods);
+                _glfwInputKey(window, GLFW_KEY_RIGHT_SHIFT, scancode, action, mods);
             }
             else if (wParam == VK_SNAPSHOT)
             {
-                // Key down is not reported for the print screen key
+                // Key down is not reported for the Print Screen key
                 _glfwInputKey(window, key, scancode, GLFW_PRESS, mods);
                 _glfwInputKey(window, key, scancode, GLFW_RELEASE, mods);
             }
             else
-                _glfwInputKey(window, key, scancode, GLFW_RELEASE, mods);
+                _glfwInputKey(window, key, scancode, action, mods);
 
             break;
         }
@@ -388,54 +370,40 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
         case WM_RBUTTONDOWN:
         case WM_MBUTTONDOWN:
         case WM_XBUTTONDOWN:
-        {
-            const int mods = getKeyMods();
-
-            SetCapture(hWnd);
-
-            if (uMsg == WM_LBUTTONDOWN)
-                _glfwInputMouseClick(window, GLFW_MOUSE_BUTTON_LEFT, GLFW_PRESS, mods);
-            else if (uMsg == WM_RBUTTONDOWN)
-                _glfwInputMouseClick(window, GLFW_MOUSE_BUTTON_RIGHT, GLFW_PRESS, mods);
-            else if (uMsg == WM_MBUTTONDOWN)
-                _glfwInputMouseClick(window, GLFW_MOUSE_BUTTON_MIDDLE, GLFW_PRESS, mods);
-            else
-            {
-                if (HIWORD(wParam) == XBUTTON1)
-                    _glfwInputMouseClick(window, GLFW_MOUSE_BUTTON_4, GLFW_PRESS, mods);
-                else if (HIWORD(wParam) == XBUTTON2)
-                    _glfwInputMouseClick(window, GLFW_MOUSE_BUTTON_5, GLFW_PRESS, mods);
-
-                return TRUE;
-            }
-
-            return 0;
-        }
-
         case WM_LBUTTONUP:
         case WM_RBUTTONUP:
         case WM_MBUTTONUP:
         case WM_XBUTTONUP:
         {
-            const int mods = getKeyMods();
+            int button, action;
 
-            ReleaseCapture();
+            if (uMsg == WM_LBUTTONDOWN || uMsg == WM_LBUTTONUP)
+                button = GLFW_MOUSE_BUTTON_LEFT;
+            else if (uMsg == WM_RBUTTONDOWN || uMsg == WM_RBUTTONUP)
+                button = GLFW_MOUSE_BUTTON_RIGHT;
+            else if (uMsg == WM_MBUTTONDOWN || uMsg == WM_MBUTTONUP)
+                button = GLFW_MOUSE_BUTTON_MIDDLE;
+            else if (GET_XBUTTON_WPARAM(wParam) == XBUTTON1)
+                button = GLFW_MOUSE_BUTTON_4;
+            else
+                button = GLFW_MOUSE_BUTTON_5;
 
-            if (uMsg == WM_LBUTTONUP)
-                _glfwInputMouseClick(window, GLFW_MOUSE_BUTTON_LEFT, GLFW_RELEASE, mods);
-            else if (uMsg == WM_RBUTTONUP)
-                _glfwInputMouseClick(window, GLFW_MOUSE_BUTTON_RIGHT, GLFW_RELEASE, mods);
-            else if (uMsg == WM_MBUTTONUP)
-                _glfwInputMouseClick(window, GLFW_MOUSE_BUTTON_MIDDLE, GLFW_RELEASE, mods);
+            if (uMsg == WM_LBUTTONDOWN || uMsg == WM_RBUTTONDOWN ||
+                uMsg == WM_MBUTTONDOWN || uMsg == WM_XBUTTONDOWN)
+            {
+                action = GLFW_PRESS;
+                SetCapture(hWnd);
+            }
             else
             {
-                if (HIWORD(wParam) == XBUTTON1)
-                    _glfwInputMouseClick(window, GLFW_MOUSE_BUTTON_4, GLFW_RELEASE, mods);
-                else if (HIWORD(wParam) == XBUTTON2)
-                    _glfwInputMouseClick(window, GLFW_MOUSE_BUTTON_5, GLFW_RELEASE, mods);
-
-                return TRUE;
+                action = GLFW_RELEASE;
+                ReleaseCapture();
             }
+
+            _glfwInputMouseClick(window, button, action, getKeyMods());
+
+            if (uMsg == WM_XBUTTONDOWN || uMsg == WM_XBUTTONUP)
+                return TRUE;
 
             return 0;
         }
@@ -615,6 +583,19 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
             break;
         }
 
+        case WM_DPICHANGED:
+        {
+            RECT* rect = (RECT*) lParam;
+            SetWindowPos(window->win32.handle,
+                         HWND_TOP,
+                         rect->left,
+                         rect->top,
+                         rect->right - rect->left,
+                         rect->bottom - rect->top,
+                         SWP_NOACTIVATE | SWP_NOZORDER);
+            break;
+        }
+
         case WM_DEVICECHANGE:
         {
             if (DBT_DEVNODES_CHANGED == wParam)
@@ -660,7 +641,7 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
         }
     }
 
-    return DefWindowProc(hWnd, uMsg, wParam, lParam);
+    return DefWindowProcW(hWnd, uMsg, wParam, lParam);
 }
 
 // Creates the GLFW window and rendering context
@@ -830,6 +811,7 @@ int _glfwPlatformCreateWindow(_GLFWwindow* window,
         if (!_glfwCreateContext(window, ctxconfig, fbconfig))
             return GLFW_FALSE;
 
+#if defined(_GLFW_WGL)
         status = _glfwAnalyzeContext(window, ctxconfig, fbconfig);
 
         if (status == _GLFW_RECREATION_IMPOSSIBLE)
@@ -843,7 +825,7 @@ int _glfwPlatformCreateWindow(_GLFWwindow* window,
             // have a current context (actually until we have implicitly loaded
             // the vendor ICD)
 
-            // Yes, this is strange, and yes, this is the proper way on Win32
+            // Yes, this is strange, and yes, this is the proper way on WGL
 
             // As Windows only allows you to set the pixel format once for
             // a window, we need to destroy the current window and create a new
@@ -869,6 +851,7 @@ int _glfwPlatformCreateWindow(_GLFWwindow* window,
             if (!_glfwCreateContext(window, ctxconfig, fbconfig))
                 return GLFW_FALSE;
         }
+#endif // _GLFW_WGL
     }
 
     if (window->monitor)
@@ -1194,6 +1177,30 @@ void _glfwPlatformSetCursorMode(_GLFWwindow* window, int mode)
     }
     else
         SetCursor(NULL);
+}
+
+const char* _glfwPlatformGetKeyName(int key, int scancode)
+{
+    WCHAR name[16];
+
+    if (key != GLFW_KEY_UNKNOWN)
+        scancode = _glfw.win32.nativeKeys[key];
+
+    if (!_glfwIsPrintable(_glfw.win32.publicKeys[scancode]))
+        return NULL;
+
+    if (!GetKeyNameTextW(scancode << 16, name, sizeof(name) / sizeof(WCHAR)))
+        return NULL;
+
+    if (!WideCharToMultiByte(CP_UTF8, 0, name, -1,
+                             _glfw.win32.keyName,
+                             sizeof(_glfw.win32.keyName),
+                             NULL, NULL))
+    {
+        return NULL;
+    }
+
+    return _glfw.win32.keyName;
 }
 
 int _glfwPlatformCreateCursor(_GLFWcursor* cursor,

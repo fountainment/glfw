@@ -62,7 +62,7 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
 //
 static GLFWbool initLibraries(void)
 {
-    _glfw.win32.winmm.instance = LoadLibraryW(L"winmm.dll");
+    _glfw.win32.winmm.instance = LoadLibraryA("winmm.dll");
     if (!_glfw.win32.winmm.instance)
     {
         _glfwInputError(GLFW_PLATFORM_ERROR, "Win32: Failed to load winmm.dll");
@@ -78,7 +78,7 @@ static GLFWbool initLibraries(void)
     _glfw.win32.winmm.timeGetTime = (TIMEGETTIME_T)
         GetProcAddress(_glfw.win32.winmm.instance, "timeGetTime");
 
-    _glfw.win32.user32.instance = LoadLibraryW(L"user32.dll");
+    _glfw.win32.user32.instance = LoadLibraryA("user32.dll");
     if (!_glfw.win32.user32.instance)
     {
         _glfwInputError(GLFW_PLATFORM_ERROR, "Win32: Failed to load user32.dll");
@@ -90,13 +90,20 @@ static GLFWbool initLibraries(void)
     _glfw.win32.user32.ChangeWindowMessageFilterEx = (CHANGEWINDOWMESSAGEFILTEREX_T)
         GetProcAddress(_glfw.win32.user32.instance, "ChangeWindowMessageFilterEx");
 
-    _glfw.win32.dwmapi.instance = LoadLibraryW(L"dwmapi.dll");
+    _glfw.win32.dwmapi.instance = LoadLibraryA("dwmapi.dll");
     if (_glfw.win32.dwmapi.instance)
     {
         _glfw.win32.dwmapi.DwmIsCompositionEnabled = (DWMISCOMPOSITIONENABLED_T)
             GetProcAddress(_glfw.win32.dwmapi.instance, "DwmIsCompositionEnabled");
         _glfw.win32.dwmapi.DwmFlush = (DWMFLUSH_T)
             GetProcAddress(_glfw.win32.dwmapi.instance, "DwmFlush");
+    }
+
+    _glfw.win32.shcore.instance = LoadLibraryA("shcore.dll");
+    if (_glfw.win32.shcore.instance)
+    {
+        _glfw.win32.shcore.SetProcessDPIAwareness = (SETPROCESSDPIAWARENESS_T)
+            GetProcAddress(_glfw.win32.shcore.instance, "SetProcessDPIAwareness");
     }
 
     return GLFW_TRUE;
@@ -114,13 +121,19 @@ static void terminateLibraries(void)
 
     if (_glfw.win32.dwmapi.instance)
         FreeLibrary(_glfw.win32.dwmapi.instance);
+
+    if (_glfw.win32.shcore.instance)
+        FreeLibrary(_glfw.win32.shcore.instance);
 }
 
 // Create key code translation tables
 //
 static void createKeyTables(void)
 {
+    int scancode;
+
     memset(_glfw.win32.publicKeys, -1, sizeof(_glfw.win32.publicKeys));
+    memset(_glfw.win32.nativeKeys, -1, sizeof(_glfw.win32.nativeKeys));
 
     _glfw.win32.publicKeys[0x00B] = GLFW_KEY_0;
     _glfw.win32.publicKeys[0x002] = GLFW_KEY_1;
@@ -242,6 +255,12 @@ static void createKeyTables(void)
     _glfw.win32.publicKeys[0x11C] = GLFW_KEY_KP_ENTER;
     _glfw.win32.publicKeys[0x037] = GLFW_KEY_KP_MULTIPLY;
     _glfw.win32.publicKeys[0x04A] = GLFW_KEY_KP_SUBTRACT;
+
+    for (scancode = 0;  scancode < 512;  scancode++)
+    {
+        if (_glfw.win32.publicKeys[scancode] > 0)
+            _glfw.win32.nativeKeys[_glfw.win32.publicKeys[scancode]] = scancode;
+    }
 }
 
 
@@ -328,7 +347,9 @@ int _glfwPlatformInit(void)
 
     createKeyTables();
 
-    if (_glfw_SetProcessDPIAware)
+    if (_glfw_SetProcessDPIAwareness)
+        _glfw_SetProcessDPIAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+    else if (_glfw_SetProcessDPIAware)
         _glfw_SetProcessDPIAware();
 
     if (!_glfwRegisterWindowClass())

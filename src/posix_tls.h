@@ -37,12 +37,13 @@
 //
 typedef struct _GLFWtlsPOSIX
 {
+    GLFWbool        allocated;
     pthread_key_t   context;
 
 } _GLFWtlsPOSIX;
 
 
-int _glfwCreateContextTLS(void);
+GLFWbool _glfwCreateContextTLS(void);
 void _glfwDestroyContextTLS(void);
 void _glfwSetContextTLS(_GLFWwindow* context);
 
