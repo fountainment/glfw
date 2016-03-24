@@ -31,6 +31,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <stdint.h>
+#include <dlfcn.h>
 
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
@@ -46,15 +47,41 @@
 // The Xinerama extension provides legacy monitor indices
 #include <X11/extensions/Xinerama.h>
 
-#if defined(_GLFW_HAS_XINPUT)
- // The XInput2 extension provides improved input events
- #include <X11/extensions/XInput2.h>
-#endif
-
 #if defined(_GLFW_HAS_XF86VM)
  // The Xf86VidMode extension provides fallback gamma control
  #include <X11/extensions/xf86vmode.h>
 #endif
+
+typedef XID xcb_window_t;
+typedef XID xcb_visualid_t;
+typedef struct xcb_connection_t xcb_connection_t;
+typedef xcb_connection_t* (* XGETXCBCONNECTION_T)(Display*);
+
+typedef VkFlags VkXlibSurfaceCreateFlagsKHR;
+typedef VkFlags VkXcbSurfaceCreateFlagsKHR;
+
+typedef struct VkXlibSurfaceCreateInfoKHR
+{
+    VkStructureType             sType;
+    const void*                 pNext;
+    VkXlibSurfaceCreateFlagsKHR flags;
+    Display*                    dpy;
+    Window                      window;
+} VkXlibSurfaceCreateInfoKHR;
+
+typedef struct VkXcbSurfaceCreateInfoKHR
+{
+    VkStructureType             sType;
+    const void*                 pNext;
+    VkXcbSurfaceCreateFlagsKHR  flags;
+    xcb_connection_t*           connection;
+    xcb_window_t                window;
+} VkXcbSurfaceCreateInfoKHR;
+
+typedef VkResult (APIENTRY *PFN_vkCreateXlibSurfaceKHR)(VkInstance,const VkXlibSurfaceCreateInfoKHR*,const VkAllocationCallbacks*,VkSurfaceKHR*);
+typedef VkBool32 (APIENTRY *PFN_vkGetPhysicalDeviceXlibPresentationSupportKHR)(VkPhysicalDevice,uint32_t,Display*,VisualID);
+typedef VkResult (APIENTRY *PFN_vkCreateXcbSurfaceKHR)(VkInstance,const VkXcbSurfaceCreateInfoKHR*,const VkAllocationCallbacks*,VkSurfaceKHR*);
+typedef VkBool32 (APIENTRY *PFN_vkGetPhysicalDeviceXcbPresentationSupportKHR)(VkPhysicalDevice,uint32_t,xcb_connection_t*,xcb_visualid_t);
 
 #include "posix_tls.h"
 #include "posix_time.h"
@@ -64,12 +91,16 @@
 #if defined(_GLFW_GLX)
  #include "glx_context.h"
 #elif defined(_GLFW_EGL)
- #define _GLFW_EGL_NATIVE_WINDOW  window->x11.handle
- #define _GLFW_EGL_NATIVE_DISPLAY _glfw.x11.display
+ #define _GLFW_EGL_NATIVE_WINDOW  ((EGLNativeWindowType) window->x11.handle)
+ #define _GLFW_EGL_NATIVE_DISPLAY ((EGLNativeDisplayType) _glfw.x11.display)
  #include "egl_context.h"
 #else
  #error "No supported context creation API selected"
 #endif
+
+#define _glfw_dlopen(name) dlopen(name, RTLD_LAZY | RTLD_LOCAL)
+#define _glfw_dlclose(handle) dlclose(handle)
+#define _glfw_dlsym(handle, name) dlsym(handle, name)
 
 #define _GLFW_PLATFORM_WINDOW_STATE         _GLFWwindowX11  x11
 #define _GLFW_PLATFORM_LIBRARY_WINDOW_STATE _GLFWlibraryX11 x11
@@ -84,6 +115,8 @@ typedef struct _GLFWwindowX11
     Colormap        colormap;
     Window          handle;
     XIC             ic;
+
+    GLFWbool        overrideRedirect;
 
     // Cached position and size used to filter out duplicate events
     int             width, height;
@@ -134,11 +167,16 @@ typedef struct _GLFWlibraryX11
     Atom            WM_DELETE_WINDOW;
     Atom            NET_WM_NAME;
     Atom            NET_WM_ICON_NAME;
+    Atom            NET_WM_ICON;
     Atom            NET_WM_PID;
     Atom            NET_WM_PING;
+    Atom            NET_WM_WINDOW_TYPE;
+    Atom            NET_WM_WINDOW_TYPE_NORMAL;
     Atom            NET_WM_STATE;
     Atom            NET_WM_STATE_ABOVE;
     Atom            NET_WM_STATE_FULLSCREEN;
+    Atom            NET_WM_STATE_MAXIMIZED_VERT;
+    Atom            NET_WM_STATE_MAXIMIZED_HORZ;
     Atom            NET_WM_BYPASS_COMPOSITOR;
     Atom            NET_WM_FULLSCREEN_MONITORS;
     Atom            NET_ACTIVE_WINDOW;
@@ -207,16 +245,10 @@ typedef struct _GLFWlibraryX11
         int         minor;
     } xinerama;
 
-#if defined(_GLFW_HAS_XINPUT)
     struct {
-        GLFWbool    available;
-        int         majorOpcode;
-        int         eventBase;
-        int         errorBase;
-        int         major;
-        int         minor;
-    } xi;
-#endif /*_GLFW_HAS_XINPUT*/
+        void*       handle;
+        XGETXCBCONNECTION_T XGetXCBConnection;
+    } x11xcb;
 
 #if defined(_GLFW_HAS_XF86VM)
     struct {
@@ -253,18 +285,18 @@ typedef struct _GLFWcursorX11
 } _GLFWcursorX11;
 
 
-GLFWbool _glfwSetVideoMode(_GLFWmonitor* monitor, const GLFWvidmode* desired);
-void _glfwRestoreVideoMode(_GLFWmonitor* monitor);
+GLFWbool _glfwSetVideoModeX11(_GLFWmonitor* monitor, const GLFWvidmode* desired);
+void _glfwRestoreVideoModeX11(_GLFWmonitor* monitor);
 
-Cursor _glfwCreateCursor(const GLFWimage* image, int xhot, int yhot);
+Cursor _glfwCreateCursorX11(const GLFWimage* image, int xhot, int yhot);
 
-unsigned long _glfwGetWindowProperty(Window window,
-                                     Atom property,
-                                     Atom type,
-                                     unsigned char** value);
+unsigned long _glfwGetWindowPropertyX11(Window window,
+                                        Atom property,
+                                        Atom type,
+                                        unsigned char** value);
 
-void _glfwGrabXErrorHandler(void);
-void _glfwReleaseXErrorHandler(void);
-void _glfwInputXError(int error, const char* message);
+void _glfwGrabErrorHandlerX11(void);
+void _glfwReleaseErrorHandlerX11(void);
+void _glfwInputErrorX11(int error, const char* message);
 
 #endif // _glfw3_x11_platform_h_

@@ -28,6 +28,7 @@
 #define _glfw3_cocoa_platform_h_
 
 #include <stdint.h>
+#include <dlfcn.h>
 
 #if defined(__OBJC__)
 #import <Carbon/Carbon.h>
@@ -39,13 +40,17 @@ typedef void* id;
 #endif
 
 #include "posix_tls.h"
-#include "iokit_joystick.h"
+#include "cocoa_joystick.h"
 
 #if defined(_GLFW_NSGL)
  #include "nsgl_context.h"
 #else
  #error "The Cocoa backend depends on NSGL platform support"
 #endif
+
+#define _glfw_dlopen(name) dlopen(name, RTLD_LAZY | RTLD_LOCAL)
+#define _glfw_dlclose(handle) dlclose(handle)
+#define _glfw_dlsym(handle, name) dlsym(handle, name)
 
 #define _GLFW_PLATFORM_WINDOW_STATE         _GLFWwindowNS  ns
 #define _GLFW_PLATFORM_LIBRARY_WINDOW_STATE _GLFWlibraryNS ns
@@ -61,7 +66,6 @@ typedef struct _GLFWwindowNS
     id              object;
     id              delegate;
     id              view;
-    unsigned int    modifierFlags;
 
     // The total sum of the distances the cursor has been warped
     // since the last cursor motion event was processed
@@ -114,15 +118,14 @@ typedef struct _GLFWcursorNS
 //
 typedef struct _GLFWtimeNS
 {
-    double          base;
-    double          resolution;
+    GLFWuint64      frequency;
 
 } _GLFWtimeNS;
 
 
-void _glfwInitTimer(void);
+void _glfwInitTimerNS(void);
 
-GLFWbool _glfwSetVideoMode(_GLFWmonitor* monitor, const GLFWvidmode* desired);
-void _glfwRestoreVideoMode(_GLFWmonitor* monitor);
+GLFWbool _glfwSetVideoModeNS(_GLFWmonitor* monitor, const GLFWvidmode* desired);
+void _glfwRestoreVideoModeNS(_GLFWmonitor* monitor);
 
 #endif // _glfw3_cocoa_platform_h_

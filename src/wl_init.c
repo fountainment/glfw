@@ -36,6 +36,11 @@
 #include <wayland-cursor.h>
 
 
+static inline int min(int n1, int n2)
+{
+    return n1 < n2 ? n1 : n2;
+}
+
 static void pointerHandleEnter(void* data,
                                struct wl_pointer* pointer,
                                uint32_t serial,
@@ -79,12 +84,7 @@ static void pointerHandleMotion(void* data,
         return;
 
     if (window->cursorMode == GLFW_CURSOR_DISABLED)
-    {
-        /* TODO */
-        _glfwInputError(GLFW_PLATFORM_ERROR,
-                        "Wayland: GLFW_CURSOR_DISABLED not supported");
         return;
-    }
     else
     {
         window->wl.cursorPosX = wl_fixed_to_double(sx);
@@ -380,8 +380,10 @@ static void registryHandleGlobal(void* data,
 {
     if (strcmp(interface, "wl_compositor") == 0)
     {
+        _glfw.wl.wl_compositor_version = min(3, version);
         _glfw.wl.compositor =
-            wl_registry_bind(registry, name, &wl_compositor_interface, 1);
+            wl_registry_bind(registry, name, &wl_compositor_interface,
+                             _glfw.wl.wl_compositor_version);
     }
     else if (strcmp(interface, "wl_shm") == 0)
     {
@@ -395,7 +397,7 @@ static void registryHandleGlobal(void* data,
     }
     else if (strcmp(interface, "wl_output") == 0)
     {
-        _glfwAddOutput(name, version);
+        _glfwAddOutputWayland(name, version);
     }
     else if (strcmp(interface, "wl_seat") == 0)
     {
@@ -405,6 +407,20 @@ static void registryHandleGlobal(void* data,
                 wl_registry_bind(registry, name, &wl_seat_interface, 1);
             wl_seat_add_listener(_glfw.wl.seat, &seatListener, NULL);
         }
+    }
+    else if (strcmp(interface, "zwp_relative_pointer_manager_v1") == 0)
+    {
+        _glfw.wl.relativePointerManager =
+            wl_registry_bind(registry, name,
+                             &zwp_relative_pointer_manager_v1_interface,
+                             1);
+    }
+    else if (strcmp(interface, "zwp_pointer_constraints_v1") == 0)
+    {
+        _glfw.wl.pointerConstraints =
+            wl_registry_bind(registry, name,
+                             &zwp_pointer_constraints_v1_interface,
+                             1);
     }
 }
 
@@ -581,11 +597,16 @@ int _glfwPlatformInit(void)
     // Sync so we got all initial output events
     wl_display_roundtrip(_glfw.wl.display);
 
-    if (!_glfwInitContextAPI())
+    if (!_glfwInitThreadLocalStoragePOSIX())
         return GLFW_FALSE;
 
-    _glfwInitTimer();
-    _glfwInitJoysticks();
+    if (!_glfwInitEGL())
+        return GLFW_FALSE;
+
+    if (!_glfwInitJoysticksLinux())
+        return GLFW_FALSE;
+
+    _glfwInitTimerPOSIX();
 
     if (_glfw.wl.pointer && _glfw.wl.shm)
     {
@@ -605,8 +626,9 @@ int _glfwPlatformInit(void)
 
 void _glfwPlatformTerminate(void)
 {
-    _glfwTerminateContextAPI();
-    _glfwTerminateJoysticks();
+    _glfwTerminateEGL();
+    _glfwTerminateJoysticksLinux();
+    _glfwTerminateThreadLocalStoragePOSIX();
 
     if (_glfw.wl.cursorTheme)
         wl_cursor_theme_destroy(_glfw.wl.cursorTheme);

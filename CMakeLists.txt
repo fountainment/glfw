@@ -1,3 +1,5 @@
+set(CMAKE_LEGACY_CYGWIN_WIN32 OFF)
+
 project(GLFW C)
 
 cmake_minimum_required(VERSION 2.8.12)
@@ -50,6 +52,13 @@ if (BUILD_SHARED_LIBS)
     set(_GLFW_BUILD_DLL 1)
 endif()
 
+if (BUILD_SHARED_LIBS AND UNIX)
+    # On Unix-like systems, shared libraries can use the soname system.
+    set(GLFW_LIB_NAME glfw)
+else()
+    set(GLFW_LIB_NAME glfw3)
+endif()
+
 if (GLFW_USE_WAYLAND)
     set(GLFW_USE_EGL ON)
 elseif (GLFW_USE_MIR)
@@ -59,30 +68,17 @@ endif()
 set(CMAKE_MODULE_PATH "${GLFW_SOURCE_DIR}/CMake/modules")
 
 find_package(Threads REQUIRED)
+find_package(Vulkan)
 
 if (GLFW_BUILD_DOCS)
     set(DOXYGEN_SKIP_DOT TRUE)
     find_package(Doxygen)
-
-    if (GLFW_DOCUMENT_INTERNALS)
-        set(GLFW_INTERNAL_DOCS "${GLFW_SOURCE_DIR}/src/internal.h ${GLFW_SOURCE_DIR}/docs/internal.dox")
-    endif()
 endif()
 
 #--------------------------------------------------------------------
 # Set compiler specific flags
 #--------------------------------------------------------------------
-if (UNIX)
-    add_definitions(-Wall)
-
-    if (BUILD_SHARED_LIBS)
-        add_definitions(-fvisibility=hidden)
-    endif()
-endif()
-
 if (MSVC)
-    add_definitions(-D_CRT_SECURE_NO_WARNINGS)
-
     if (NOT USE_MSVC_RUNTIME_LIBRARY_DLL)
         foreach (flag CMAKE_C_FLAGS
                       CMAKE_C_FLAGS_DEBUG
@@ -125,12 +121,6 @@ if (MINGW)
     if (_GLFW_HAS_64ASLR)
         set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--high-entropy-va ${CMAKE_SHARED_LINKER_FLAGS}")
     endif()
-
-    # HACK: When building on MinGW, WINVER and UNICODE need to be defined before
-    # the inclusion of stddef.h (by glfw3.h), which is itself included before
-    # win32_platform.h.  We define them here until a saner solution can be found
-    # NOTE: MinGW-w64 and Visual C++ do /not/ need this hack.
-    add_definitions(-DUNICODE -DWINVER=0x0501)
 endif()
 
 #--------------------------------------------------------------------
@@ -242,21 +232,6 @@ if (_GLFW_X11)
     list(APPEND glfw_LIBRARIES "${X11_Xinerama_LIB}")
     list(APPEND glfw_PKG_DEPS "xinerama")
 
-    # Check for XInput (high-resolution cursor motion)
-    if (X11_Xinput_FOUND)
-        list(APPEND glfw_INCLUDE_DIRS "${X11_Xinput_INCLUDE_PATH}")
-        list(APPEND glfw_PKG_DEPS "xi")
-
-        if (X11_Xinput_LIB)
-            list(APPEND glfw_LIBRARIES "${X11_Xinput_LIB}")
-        else()
-            # Backwards compatibility (bug in CMake 2.8.7)
-            list(APPEND glfw_LIBRARIES Xi)
-        endif()
-
-        set(_GLFW_HAS_XINPUT TRUE)
-    endif()
-
     # Check for Xf86VidMode (fallback gamma control)
     if (X11_xf86vmode_FOUND)
         list(APPEND glfw_INCLUDE_DIRS "${X11_xf86vmode_INCLUDE_PATH}")
@@ -294,11 +269,17 @@ endif()
 # Use Wayland for window creation
 #--------------------------------------------------------------------
 if (_GLFW_WAYLAND)
+    find_package(ECM REQUIRED NO_MODULE)
+    set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${ECM_MODULE_PATH})
+
     find_package(Wayland REQUIRED)
+    find_package(WaylandScanner REQUIRED)
+    find_package(WaylandProtocols 1.1 REQUIRED)
+
     list(APPEND glfw_PKG_DEPS "wayland-egl")
 
-    list(APPEND glfw_INCLUDE_DIRS "${WAYLAND_INCLUDE_DIR}")
-    list(APPEND glfw_LIBRARIES "${WAYLAND_LIBRARIES}" "${CMAKE_THREAD_LIBS_INIT}")
+    list(APPEND glfw_INCLUDE_DIRS "${Wayland_INCLUDE_DIR}")
+    list(APPEND glfw_LIBRARIES "${Wayland_LIBRARIES}" "${CMAKE_THREAD_LIBS_INIT}")
 
     find_package(XKBCommon REQUIRED)
     list(APPEND glfw_PKG_DEPS "xkbcommon")
@@ -363,7 +344,6 @@ endif()
 #--------------------------------------------------------------------
 # Export GLFW library dependencies
 #--------------------------------------------------------------------
-set(GLFW_LIBRARIES ${glfw_LIBRARIES} CACHE STRING "Dependencies of GLFW")
 foreach(arg ${glfw_PKG_DEPS})
     set(GLFW_PKG_DEPS "${GLFW_PKG_DEPS} ${arg}")
 endforeach()
@@ -372,46 +352,24 @@ foreach(arg ${glfw_PKG_LIBS})
 endforeach()
 
 #--------------------------------------------------------------------
-# Choose library output name
-#--------------------------------------------------------------------
-if (BUILD_SHARED_LIBS AND UNIX)
-    # On Unix-like systems, shared libraries can use the soname system.
-    set(GLFW_LIB_NAME glfw)
-else()
-    set(GLFW_LIB_NAME glfw3)
-endif()
-
-#--------------------------------------------------------------------
 # Create generated files
 #--------------------------------------------------------------------
 include(CMakePackageConfigHelpers)
 
-if (UNIX)
-    set(GLFW_CONFIG_PATH "${CMAKE_INSTALL_PREFIX}/lib/cmake/glfw3/")
-else()
-    set(GLFW_CONFIG_PATH "${CMAKE_INSTALL_PREFIX}/")
-endif()
+set(GLFW_CONFIG_PATH "lib${LIB_SUFFIX}/cmake/glfw3")
 
-configure_package_config_file("${GLFW_SOURCE_DIR}/src/glfw3Config.cmake.in"
-                              "${GLFW_BINARY_DIR}/src/glfw3Config.cmake"
+configure_package_config_file(src/glfw3Config.cmake.in
+                              src/glfw3Config.cmake
                               INSTALL_DESTINATION "${GLFW_CONFIG_PATH}"
-                              PATH_VARS CMAKE_INSTALL_PREFIX
                               NO_CHECK_REQUIRED_COMPONENTS_MACRO)
 
-write_basic_package_version_file("${GLFW_BINARY_DIR}/src/glfw3ConfigVersion.cmake" 
+write_basic_package_version_file(src/glfw3ConfigVersion.cmake
                                  VERSION ${GLFW_VERSION_FULL}
                                  COMPATIBILITY SameMajorVersion)
 
-if (GLFW_BUILD_DOCS)
-    configure_file("${GLFW_SOURCE_DIR}/docs/Doxyfile.in"
-                   "${GLFW_BINARY_DIR}/docs/Doxyfile" @ONLY)
-endif()
+configure_file(src/glfw_config.h.in src/glfw_config.h @ONLY)
 
-configure_file("${GLFW_SOURCE_DIR}/src/glfw_config.h.in"
-               "${GLFW_BINARY_DIR}/src/glfw_config.h" @ONLY)
-
-configure_file("${GLFW_SOURCE_DIR}/src/glfw3.pc.in"
-               "${GLFW_BINARY_DIR}/src/glfw3.pc" @ONLY)
+configure_file(src/glfw3.pc.in src/glfw3.pc @ONLY)
 
 #--------------------------------------------------------------------
 # Add subdirectories
@@ -440,16 +398,18 @@ if (GLFW_INSTALL)
 
     install(FILES "${GLFW_BINARY_DIR}/src/glfw3Config.cmake"
                   "${GLFW_BINARY_DIR}/src/glfw3ConfigVersion.cmake"
-            DESTINATION lib${LIB_SUFFIX}/cmake/glfw)
+            DESTINATION "${GLFW_CONFIG_PATH}")
 
-    install(EXPORT glfwTargets DESTINATION lib${LIB_SUFFIX}/cmake/glfw)
+    install(EXPORT glfwTargets FILE glfw3Targets.cmake
+            EXPORT_LINK_INTERFACE_LIBRARIES
+            DESTINATION "${GLFW_CONFIG_PATH}")
     install(FILES "${GLFW_BINARY_DIR}/src/glfw3.pc"
-            DESTINATION lib${LIB_SUFFIX}/pkgconfig)
+            DESTINATION "lib${LIB_SUFFIX}/pkgconfig")
 
     # Only generate this target if no higher-level project already has
     if (NOT TARGET uninstall)
-        configure_file("${GLFW_SOURCE_DIR}/cmake_uninstall.cmake.in"
-                       "${GLFW_BINARY_DIR}/cmake_uninstall.cmake" IMMEDIATE @ONLY)
+        configure_file(cmake_uninstall.cmake.in
+                       cmake_uninstall.cmake IMMEDIATE @ONLY)
 
         add_custom_target(uninstall
                           "${CMAKE_COMMAND}" -P

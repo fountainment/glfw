@@ -310,12 +310,12 @@ static GLFWbool createSurface(_GLFWwindow* window)
 //////                       GLFW internal API                      //////
 //////////////////////////////////////////////////////////////////////////
 
-void _glfwInitEventQueue(EventQueue* queue)
+void _glfwInitEventQueueMir(EventQueue* queue)
 {
     TAILQ_INIT(&queue->head);
 }
 
-void _glfwDeleteEventQueue(EventQueue* queue)
+void _glfwDeleteEventQueueMir(EventQueue* queue)
 {
     if (queue)
     {
@@ -347,14 +347,14 @@ int _glfwPlatformCreateWindow(_GLFWwindow* window,
 {
     if (ctxconfig->api != GLFW_NO_API)
     {
-        if (!_glfwCreateContext(window, ctxconfig, fbconfig))
+        if (!_glfwCreateContextEGL(window, ctxconfig, fbconfig))
             return GLFW_FALSE;
     }
 
-    if (wndconfig->monitor)
+    if (window->monitor)
     {
         GLFWvidmode mode;
-        _glfwPlatformGetVideoMode(wndconfig->monitor, &mode);
+        _glfwPlatformGetVideoMode(window->monitor, &mode);
 
         mir_surface_set_state(window->mir.surface, mir_surface_state_fullscreen);
 
@@ -388,7 +388,7 @@ void _glfwPlatformDestroyWindow(_GLFWwindow* window)
         window->mir.surface = NULL;
     }
 
-    _glfwDestroyContext(window);
+    _glfwDestroyContextEGL(window);
 }
 
 void _glfwPlatformSetWindowTitle(_GLFWwindow* window, const char* title)
@@ -401,6 +401,13 @@ void _glfwPlatformSetWindowTitle(_GLFWwindow* window, const char* title)
 
     mir_surface_apply_spec(window->mir.surface, spec);
     mir_surface_spec_release(spec);
+}
+
+void _glfwPlatformSetWindowIcon(_GLFWwindow* window,
+                                int count, const GLFWimage* images)
+{
+    _glfwInputError(GLFW_PLATFORM_ERROR,
+                    "Mir: Unsupported function %s", __PRETTY_FUNCTION__);
 }
 
 void _glfwPlatformSetWindowSize(_GLFWwindow* window, int width, int height)
@@ -467,6 +474,12 @@ void _glfwPlatformRestoreWindow(_GLFWwindow* window)
     mir_surface_set_state(window->mir.surface, mir_surface_state_restored);
 }
 
+void _glfwPlatformMaximizeWindow(_GLFWwindow* window)
+{
+    _glfwInputError(GLFW_PLATFORM_ERROR,
+                    "Mir: Unsupported function %s", __PRETTY_FUNCTION__);
+}
+
 void _glfwPlatformHideWindow(_GLFWwindow* window)
 {
     MirSurfaceSpec* spec;
@@ -489,7 +502,17 @@ void _glfwPlatformShowWindow(_GLFWwindow* window)
     mir_surface_spec_release(spec);
 }
 
-void _glfwPlatformUnhideWindow(_GLFWwindow* window)
+void _glfwPlatformFocusWindow(_GLFWwindow* window)
+{
+    _glfwInputError(GLFW_PLATFORM_ERROR,
+                    "Mir: Unsupported function %s", __PRETTY_FUNCTION__);
+}
+
+void _glfwPlatformSetWindowMonitor(_GLFWwindow* window,
+                                   _GLFWmonitor* monitor,
+                                   int xpos, int ypos,
+                                   int width, int height,
+                                   int refreshRate)
 {
     _glfwInputError(GLFW_PLATFORM_ERROR,
                     "Mir: Unsupported function %s", __PRETTY_FUNCTION__);
@@ -514,6 +537,13 @@ int _glfwPlatformWindowVisible(_GLFWwindow* window)
     return mir_surface_get_visibility(window->mir.surface) == mir_surface_visibility_exposed;
 }
 
+int _glfwPlatformWindowMaximized(_GLFWwindow* window)
+{
+    _glfwInputError(GLFW_PLATFORM_ERROR,
+                    "Mir: Unsupported function %s", __PRETTY_FUNCTION__);
+    return GLFW_FALSE;
+}
+
 void _glfwPlatformPollEvents(void)
 {
     EventNode* node = NULL;
@@ -531,6 +561,24 @@ void _glfwPlatformWaitEvents(void)
 
     if (emptyEventQueue(_glfw.mir.event_queue))
         pthread_cond_wait(&_glfw.mir.event_cond, &_glfw.mir.event_mutex);
+
+    pthread_mutex_unlock(&_glfw.mir.event_mutex);
+
+    _glfwPlatformPollEvents();
+}
+
+void _glfwPlatformWaitEventsTimeout(double timeout)
+{
+    pthread_mutex_lock(&_glfw.mir.event_mutex);
+
+    if (emptyEventQueue(_glfw.mir.event_queue))
+    {
+        struct timespec time;
+        clock_gettime(CLOCK_REALTIME, &time);
+        time.tv_sec += (long) timeout;
+        time.tv_nsec += (long) ((timeout - (long) timeout) * 1e9);
+        pthread_cond_timedwait(&_glfw.mir.event_cond, &_glfw.mir.event_mutex, &time);
+    }
 
     pthread_mutex_unlock(&_glfw.mir.event_mutex);
 
@@ -704,6 +752,76 @@ const char* _glfwPlatformGetClipboardString(_GLFWwindow* window)
                     "Mir: Unsupported function %s", __PRETTY_FUNCTION__);
 
     return NULL;
+}
+
+char** _glfwPlatformGetRequiredInstanceExtensions(unsigned int* count)
+{
+    char** extensions;
+
+    *count = 0;
+
+    if (!_glfw.vk.KHR_mir_surface)
+        return NULL;
+
+    extensions = calloc(2, sizeof(char*));
+    extensions[0] = strdup("VK_KHR_surface");
+    extensions[1] = strdup("VK_KHR_mir_surface");
+
+    *count = 2;
+    return extensions;
+}
+
+int _glfwPlatformGetPhysicalDevicePresentationSupport(VkInstance instance,
+                                                      VkPhysicalDevice device,
+                                                      unsigned int queuefamily)
+{
+    PFN_vkGetPhysicalDeviceMirPresentationSupportKHR vkGetPhysicalDeviceMirPresentationSupportKHR =
+        (PFN_vkGetPhysicalDeviceMirPresentationSupportKHR)
+        vkGetInstanceProcAddr(instance, "vkGetPhysicalDeviceMirPresentationSupportKHR");
+    if (!vkGetPhysicalDeviceMirPresentationSupportKHR)
+    {
+        _glfwInputError(GLFW_API_UNAVAILABLE,
+                        "Mir: Vulkan instance missing VK_KHR_mir_surface extension");
+        return GLFW_FALSE;
+    }
+
+    return vkGetPhysicalDeviceMirPresentationSupportKHR(device,
+                                                        queuefamily,
+                                                        _glfw.mir.connection);
+}
+
+VkResult _glfwPlatformCreateWindowSurface(VkInstance instance,
+                                          _GLFWwindow* window,
+                                          const VkAllocationCallbacks* allocator,
+                                          VkSurfaceKHR* surface)
+{
+    VkResult err;
+    VkMirSurfaceCreateInfoKHR sci;
+    PFN_vkCreateMirSurfaceKHR vkCreateMirSurfaceKHR;
+
+    vkCreateMirSurfaceKHR = (PFN_vkCreateMirSurfaceKHR)
+        vkGetInstanceProcAddr(instance, "vkCreateMirSurfaceKHR");
+    if (!vkCreateMirSurfaceKHR)
+    {
+        _glfwInputError(GLFW_API_UNAVAILABLE,
+                        "Mir: Vulkan instance missing VK_KHR_mir_surface extension");
+        return VK_ERROR_EXTENSION_NOT_PRESENT;
+    }
+
+    memset(&sci, 0, sizeof(sci));
+    sci.sType = VK_STRUCTURE_TYPE_MIR_SURFACE_CREATE_INFO_KHR;
+    sci.connection = _glfw.mir.connection;
+    sci.mirSurface = window->mir.surface;
+
+    err = vkCreateMirSurfaceKHR(instance, &sci, allocator, surface);
+    if (err)
+    {
+        _glfwInputError(GLFW_PLATFORM_ERROR,
+                        "Mir: Failed to create Vulkan surface: %s",
+                        _glfwGetVulkanResultString(err));
+    }
+
+    return err;
 }
 
 

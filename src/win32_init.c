@@ -60,7 +60,7 @@ BOOL WINAPI DllMain(HINSTANCE instance, DWORD reason, LPVOID reserved)
 
 // Load necessary libraries (DLLs)
 //
-static GLFWbool initLibraries(void)
+static GLFWbool loadLibraries(void)
 {
     _glfw.win32.winmm.instance = LoadLibraryA("winmm.dll");
     if (!_glfw.win32.winmm.instance)
@@ -102,8 +102,8 @@ static GLFWbool initLibraries(void)
     _glfw.win32.shcore.instance = LoadLibraryA("shcore.dll");
     if (_glfw.win32.shcore.instance)
     {
-        _glfw.win32.shcore.SetProcessDPIAwareness = (SETPROCESSDPIAWARENESS_T)
-            GetProcAddress(_glfw.win32.shcore.instance, "SetProcessDPIAwareness");
+        _glfw.win32.shcore.SetProcessDpiAwareness = (SETPROCESSDPIAWARENESS_T)
+            GetProcAddress(_glfw.win32.shcore.instance, "SetProcessDpiAwareness");
     }
 
     return GLFW_TRUE;
@@ -111,7 +111,7 @@ static GLFWbool initLibraries(void)
 
 // Unload used libraries (DLLs)
 //
-static void terminateLibraries(void)
+static void freeLibraries(void)
 {
     if (_glfw.win32.winmm.instance)
         FreeLibrary(_glfw.win32.winmm.instance);
@@ -263,29 +263,36 @@ static void createKeyTables(void)
     }
 }
 
+// Creates a dummy window for behind-the-scenes work
+//
+static HWND createHelperWindow(void)
+{
+    HWND window = CreateWindowExW(WS_EX_OVERLAPPEDWINDOW,
+                                  _GLFW_WNDCLASSNAME,
+                                  L"GLFW helper window",
+                                  WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
+                                  0, 0, 1, 1,
+                                  NULL, NULL,
+                                  GetModuleHandleW(NULL),
+                                  NULL);
+    if (!window)
+    {
+        _glfwInputError(GLFW_PLATFORM_ERROR,
+                        "Win32: Failed to create helper window");
+        return NULL;
+    }
+
+    return window;
+}
+
 
 //////////////////////////////////////////////////////////////////////////
 //////                       GLFW internal API                      //////
 //////////////////////////////////////////////////////////////////////////
 
-// Returns whether desktop compositing is enabled
-//
-BOOL _glfwIsCompositionEnabled(void)
-{
-    BOOL enabled;
-
-    if (!_glfw_DwmIsCompositionEnabled)
-        return FALSE;
-
-    if (_glfw_DwmIsCompositionEnabled(&enabled) != S_OK)
-        return FALSE;
-
-    return enabled;
-}
-
 // Returns a wide string version of the specified UTF-8 string
 //
-WCHAR* _glfwCreateWideStringFromUTF8(const char* source)
+WCHAR* _glfwCreateWideStringFromUTF8Win32(const char* source)
 {
     WCHAR* target;
     int length;
@@ -307,7 +314,7 @@ WCHAR* _glfwCreateWideStringFromUTF8(const char* source)
 
 // Returns a UTF-8 string version of the specified wide string
 //
-char* _glfwCreateUTF8FromWideString(const WCHAR* source)
+char* _glfwCreateUTF8FromWideStringWin32(const WCHAR* source)
 {
     char* target;
     int length;
@@ -334,6 +341,9 @@ char* _glfwCreateUTF8FromWideString(const WCHAR* source)
 
 int _glfwPlatformInit(void)
 {
+    if (!_glfwInitThreadLocalStorageWin32())
+        return GLFW_FALSE;
+
     // To make SetForegroundWindow work as we want, we need to fiddle
     // with the FOREGROUNDLOCKTIMEOUT system setting (we do this as early
     // as possible in the hope of still being the foreground process)
@@ -342,31 +352,45 @@ int _glfwPlatformInit(void)
     SystemParametersInfoW(SPI_SETFOREGROUNDLOCKTIMEOUT, 0, UIntToPtr(0),
                           SPIF_SENDCHANGE);
 
-    if (!initLibraries())
+    if (!loadLibraries())
         return GLFW_FALSE;
 
     createKeyTables();
 
-    if (_glfw_SetProcessDPIAwareness)
-        _glfw_SetProcessDPIAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
+    if (_glfw_SetProcessDpiAwareness)
+        _glfw_SetProcessDpiAwareness(PROCESS_PER_MONITOR_DPI_AWARE);
     else if (_glfw_SetProcessDPIAware)
         _glfw_SetProcessDPIAware();
 
-    if (!_glfwRegisterWindowClass())
+    if (!_glfwRegisterWindowClassWin32())
         return GLFW_FALSE;
 
-    if (!_glfwInitContextAPI())
+    _glfw.win32.helperWindow = createHelperWindow();
+    if (!_glfw.win32.helperWindow)
         return GLFW_FALSE;
 
-    _glfwInitTimer();
-    _glfwInitJoysticks();
+    _glfwPlatformPollEvents();
+
+#if defined(_GLFW_WGL)
+    if (!_glfwInitWGL())
+        return GLFW_FALSE;
+#elif defined(_GLFW_EGL)
+    if (!_glfwInitEGL())
+        return GLFW_FALSE;
+#endif
+
+    _glfwInitTimerWin32();
+    _glfwInitJoysticksWin32();
 
     return GLFW_TRUE;
 }
 
 void _glfwPlatformTerminate(void)
 {
-    _glfwUnregisterWindowClass();
+    if (_glfw.win32.helperWindow)
+        DestroyWindow(_glfw.win32.helperWindow);
+
+    _glfwUnregisterWindowClassWin32();
 
     // Restore previous foreground lock timeout system setting
     SystemParametersInfoW(SPI_SETFOREGROUNDLOCKTIMEOUT, 0,
@@ -375,9 +399,16 @@ void _glfwPlatformTerminate(void)
 
     free(_glfw.win32.clipboardString);
 
-    _glfwTerminateJoysticks();
-    _glfwTerminateContextAPI();
-    terminateLibraries();
+#if defined(_GLFW_WGL)
+    _glfwTerminateWGL();
+#elif defined(_GLFW_EGL)
+    _glfwTerminateEGL();
+#endif
+
+    _glfwTerminateJoysticksWin32();
+    _glfwTerminateThreadLocalStorageWin32();
+
+    freeLibraries();
 }
 
 const char* _glfwPlatformGetVersionString(void)

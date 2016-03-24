@@ -310,7 +310,7 @@ static void createKeyTables(void)
         }
 
         XkbFreeNames(desc, XkbKeyNamesMask, True);
-        XkbFreeClientMap(desc, 0, True);
+        XkbFreeKeyboard(desc, 0, True);
     }
 
     for (scancode = 0;  scancode < 256;  scancode++)
@@ -387,24 +387,24 @@ static void detectEWMH(void)
         return;
 
     // Then we look for the _NET_SUPPORTING_WM_CHECK property of the root window
-    if (_glfwGetWindowProperty(_glfw.x11.root,
-                               supportingWmCheck,
-                               XA_WINDOW,
-                               (unsigned char**) &windowFromRoot) != 1)
+    if (_glfwGetWindowPropertyX11(_glfw.x11.root,
+                                  supportingWmCheck,
+                                  XA_WINDOW,
+                                  (unsigned char**) &windowFromRoot) != 1)
     {
         if (windowFromRoot)
             XFree(windowFromRoot);
         return;
     }
 
-    _glfwGrabXErrorHandler();
+    _glfwGrabErrorHandlerX11();
 
     // It should be the ID of a child window (of the root)
     // Then we look for the same property on the child window
-    if (_glfwGetWindowProperty(*windowFromRoot,
-                               supportingWmCheck,
-                               XA_WINDOW,
-                               (unsigned char**) &windowFromChild) != 1)
+    if (_glfwGetWindowPropertyX11(*windowFromRoot,
+                                  supportingWmCheck,
+                                  XA_WINDOW,
+                                  (unsigned char**) &windowFromChild) != 1)
     {
         XFree(windowFromRoot);
         if (windowFromChild)
@@ -412,7 +412,7 @@ static void detectEWMH(void)
         return;
     }
 
-    _glfwReleaseXErrorHandler();
+    _glfwReleaseErrorHandlerX11();
 
     // It should be the ID of that same child window
     if (*windowFromRoot != *windowFromChild)
@@ -432,10 +432,10 @@ static void detectEWMH(void)
 
     // Now we need to check the _NET_SUPPORTED property of the root window
     // It should be a list of supported WM protocol and state atoms
-    atomCount = _glfwGetWindowProperty(_glfw.x11.root,
-                                       wmSupported,
-                                       XA_ATOM,
-                                       (unsigned char**) &supportedAtoms);
+    atomCount = _glfwGetWindowPropertyX11(_glfw.x11.root,
+                                          wmSupported,
+                                          XA_ATOM,
+                                          (unsigned char**) &supportedAtoms);
 
     // See which of the atoms we support that are supported by the WM
     _glfw.x11.NET_WM_STATE =
@@ -444,16 +444,26 @@ static void detectEWMH(void)
         getSupportedAtom(supportedAtoms, atomCount, "_NET_WM_STATE_ABOVE");
     _glfw.x11.NET_WM_STATE_FULLSCREEN =
         getSupportedAtom(supportedAtoms, atomCount, "_NET_WM_STATE_FULLSCREEN");
+    _glfw.x11.NET_WM_STATE_MAXIMIZED_VERT =
+        getSupportedAtom(supportedAtoms, atomCount, "_NET_WM_STATE_MAXIMIZED_VERT");
+    _glfw.x11.NET_WM_STATE_MAXIMIZED_HORZ =
+        getSupportedAtom(supportedAtoms, atomCount, "_NET_WM_STATE_MAXIMIZED_HORZ");
     _glfw.x11.NET_WM_FULLSCREEN_MONITORS =
         getSupportedAtom(supportedAtoms, atomCount, "_NET_WM_FULLSCREEN_MONITORS");
     _glfw.x11.NET_WM_NAME =
         getSupportedAtom(supportedAtoms, atomCount, "_NET_WM_NAME");
     _glfw.x11.NET_WM_ICON_NAME =
         getSupportedAtom(supportedAtoms, atomCount, "_NET_WM_ICON_NAME");
+    _glfw.x11.NET_WM_ICON =
+        getSupportedAtom(supportedAtoms, atomCount, "_NET_WM_ICON");
     _glfw.x11.NET_WM_PID =
         getSupportedAtom(supportedAtoms, atomCount, "_NET_WM_PID");
     _glfw.x11.NET_WM_PING =
         getSupportedAtom(supportedAtoms, atomCount, "_NET_WM_PING");
+    _glfw.x11.NET_WM_WINDOW_TYPE =
+        getSupportedAtom(supportedAtoms, atomCount, "_NET_WM_WINDOW_TYPE");
+    _glfw.x11.NET_WM_WINDOW_TYPE_NORMAL =
+        getSupportedAtom(supportedAtoms, atomCount, "_NET_WM_WINDOW_TYPE_NORMAL");
     _glfw.x11.NET_ACTIVE_WINDOW =
         getSupportedAtom(supportedAtoms, atomCount, "_NET_ACTIVE_WINDOW");
     _glfw.x11.NET_FRAME_EXTENTS =
@@ -540,25 +550,6 @@ static GLFWbool initExtensions(void)
             _glfw.x11.xinerama.available = GLFW_TRUE;
     }
 
-#if defined(_GLFW_HAS_XINPUT)
-    if (XQueryExtension(_glfw.x11.display,
-                        "XInputExtension",
-                        &_glfw.x11.xi.majorOpcode,
-                        &_glfw.x11.xi.eventBase,
-                        &_glfw.x11.xi.errorBase))
-    {
-        _glfw.x11.xi.major = 2;
-        _glfw.x11.xi.minor = 0;
-
-        if (XIQueryVersion(_glfw.x11.display,
-                           &_glfw.x11.xi.major,
-                           &_glfw.x11.xi.minor) != BadRequest)
-        {
-            _glfw.x11.xi.available = GLFW_TRUE;
-        }
-    }
-#endif /*_GLFW_HAS_XINPUT*/
-
     // Check if Xkb is supported on this display
     _glfw.x11.xkb.major = 1;
     _glfw.x11.xkb.minor = 0;
@@ -579,6 +570,13 @@ static GLFWbool initExtensions(void)
             if (supported)
                 _glfw.x11.xkb.detectable = GLFW_TRUE;
         }
+    }
+
+    _glfw.x11.x11xcb.handle = dlopen("libX11-xcb.so", RTLD_LAZY | RTLD_GLOBAL);
+    if (_glfw.x11.x11xcb.handle)
+    {
+        _glfw.x11.x11xcb.XGetXCBConnection = (XGETXCBCONNECTION_T)
+            dlsym(_glfw.x11.x11xcb.handle, "XGetXCBConnection");
     }
 
     // Update the key code LUT
@@ -628,14 +626,14 @@ static GLFWbool initExtensions(void)
 
 // Create a blank cursor for hidden and disabled cursor modes
 //
-static Cursor createNULLCursor(void)
+static Cursor createHiddenCursor(void)
 {
     unsigned char pixels[16 * 16 * 4];
     GLFWimage image = { 16, 16, pixels };
 
     memset(pixels, 0, sizeof(pixels));
 
-    return _glfwCreateCursor(&image, 0, 0);
+    return _glfwCreateCursorX11(&image, 0, 0);
 }
 
 // X error handler
@@ -653,7 +651,7 @@ static int errorHandler(Display *display, XErrorEvent* event)
 
 // Sets the X error handler callback
 //
-void _glfwGrabXErrorHandler(void)
+void _glfwGrabErrorHandlerX11(void)
 {
     _glfw.x11.errorCode = Success;
     XSetErrorHandler(errorHandler);
@@ -661,7 +659,7 @@ void _glfwGrabXErrorHandler(void)
 
 // Clears the X error handler callback
 //
-void _glfwReleaseXErrorHandler(void)
+void _glfwReleaseErrorHandlerX11(void)
 {
     // Synchronize to make sure all commands are processed
     XSync(_glfw.x11.display, False);
@@ -670,7 +668,7 @@ void _glfwReleaseXErrorHandler(void)
 
 // Reports the specified error, appending information about the last X error
 //
-void _glfwInputXError(int error, const char* message)
+void _glfwInputErrorX11(int error, const char* message)
 {
     char buffer[8192];
     XGetErrorText(_glfw.x11.display, _glfw.x11.errorCode,
@@ -681,7 +679,7 @@ void _glfwInputXError(int error, const char* message)
 
 // Creates a native cursor object from the specified image and hotspot
 //
-Cursor _glfwCreateCursor(const GLFWimage* image, int xhot, int yhot)
+Cursor _glfwCreateCursorX11(const GLFWimage* image, int xhot, int yhot)
 {
     int i;
     Cursor cursor;
@@ -698,10 +696,12 @@ Cursor _glfwCreateCursor(const GLFWimage* image, int xhot, int yhot)
 
     for (i = 0;  i < image->width * image->height;  i++, target++, source += 4)
     {
-        *target = (source[3] << 24) |
-                  (source[0] << 16) |
-                  (source[1] <<  8) |
-                   source[2];
+        unsigned int alpha = source[3];
+
+        *target = (alpha << 24) |
+                  ((unsigned char) ((source[0] * alpha) / 255) << 16) |
+                  ((unsigned char) ((source[1] * alpha) / 255) <<  8) |
+                  ((unsigned char) ((source[2] * alpha) / 255) <<  0);
     }
 
     cursor = XcursorImageLoadCursor(_glfw.x11.display, native);
@@ -751,7 +751,7 @@ int _glfwPlatformInit(void)
     if (!initExtensions())
         return GLFW_FALSE;
 
-    _glfw.x11.cursor = createNULLCursor();
+    _glfw.x11.cursor = createHiddenCursor();
 
     if (XSupportsLocale())
     {
@@ -768,19 +768,33 @@ int _glfwPlatformInit(void)
         }
     }
 
-    if (!_glfwInitContextAPI())
+    if (!_glfwInitThreadLocalStoragePOSIX())
         return GLFW_FALSE;
 
-    if (!_glfwInitJoysticks())
+#if defined(_GLFW_GLX)
+    if (!_glfwInitGLX())
+        return GLFW_FALSE;
+#elif defined(_GLFW_EGL)
+    if (!_glfwInitEGL())
+        return GLFW_FALSE;
+#endif
+
+    if (!_glfwInitJoysticksLinux())
         return GLFW_FALSE;
 
-    _glfwInitTimer();
+    _glfwInitTimerPOSIX();
 
     return GLFW_TRUE;
 }
 
 void _glfwPlatformTerminate(void)
 {
+    if (_glfw.x11.x11xcb.handle)
+    {
+        dlclose(_glfw.x11.x11xcb.handle);
+        _glfw.x11.x11xcb.handle = NULL;
+    }
+
     if (_glfw.x11.cursor)
     {
         XFreeCursor(_glfw.x11.display, _glfw.x11.cursor);
@@ -795,6 +809,10 @@ void _glfwPlatformTerminate(void)
         _glfw.x11.im = NULL;
     }
 
+#if defined(_GLFW_EGL)
+    _glfwTerminateEGL();
+#endif
+
     if (_glfw.x11.display)
     {
         XCloseDisplay(_glfw.x11.display);
@@ -803,8 +821,12 @@ void _glfwPlatformTerminate(void)
 
     // NOTE: This needs to be done after XCloseDisplay, as libGL registers
     //       cleanup callbacks that get called by it
-    _glfwTerminateContextAPI();
-    _glfwTerminateJoysticks();
+#if defined(_GLFW_GLX)
+    _glfwTerminateGLX();
+#endif
+
+    _glfwTerminateJoysticksLinux();
+    _glfwTerminateThreadLocalStoragePOSIX();
 }
 
 const char* _glfwPlatformGetVersionString(void)
@@ -822,9 +844,6 @@ const char* _glfwPlatformGetVersionString(void)
 #endif
 #if defined(__linux__)
         " /dev/js"
-#endif
-#if defined(_GLFW_HAS_XINPUT)
-        " XI"
 #endif
 #if defined(_GLFW_HAS_XF86VM)
         " Xf86vm"

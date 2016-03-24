@@ -1,15 +1,18 @@
 # GLFW
 
+[![Build status](https://travis-ci.org/glfw/glfw.svg?branch=master)](https://travis-ci.org/glfw/glfw)
+[![Build status](https://ci.appveyor.com/api/projects/status/0kf0ct9831i5l6sp/branch/master?svg=true)](https://ci.appveyor.com/project/elmindreda/glfw)
+
 ## Introduction
 
-GLFW is a free, Open Source, multi-platform library for OpenGL and OpenGL ES
-application development.  It provides a simple, platform-independent API for
-creating windows and contexts, reading input, handling events, etc.
+GLFW is a free, Open Source, multi-platform library for OpenGL, OpenGL ES and
+Vulkan application development.  It provides a simple, platform-independent API
+for creating windows, contexts and surfaces, reading input, handling events, etc.
 
 Version 3.2 is _not yet described_.
 
 If you are new to GLFW, you may find the
-[introductory tutorial](http://www.glfw.org/docs/latest/quick.html) for GLFW
+[tutorial](http://www.glfw.org/docs/latest/quick.html) for GLFW
 3 useful.  If you have used GLFW 2 in the past, there is a
 [transition guide](http://www.glfw.org/docs/latest/moving.html) for moving to
 the GLFW 3 API.
@@ -47,10 +50,10 @@ This will help both us and other people experiencing the same bug.
 
 GLFW itself needs only the headers and libraries for your window system.  It
 does not need the headers for any context creation API (WGL, GLX, EGL, NSGL) or
-client API (OpenGL, OpenGL ES) to enable support for them.
+rendering API (OpenGL, OpenGL ES, Vulkan) to enable support for them.
 
-GLFW bundles a number of dependencies in the `deps/` directory.  These are only
-used by the tests and examples and are not required to build the library.
+The examples and test programs depend on a number of tiny libraries.  These are
+located in the `deps/` directory.
 
  - [getopt\_port](https://github.com/kimgr/getopt_port/) for examples
    with command-line options
@@ -60,29 +63,72 @@ used by the tests and examples and are not required to build the library.
    [glad](https://github.com/Dav1dde/glad) for examples using modern OpenGL
  - [linmath.h](https://github.com/datenwolf/linmath.h) for linear algebra in
    examples
+ - [Vulkan headers](https://www.khronos.org/registry/vulkan/) for Vulkan tests
+
+The Vulkan example additionally requires the Vulkan SDK to be installed, or it
+will not be included in the build.
+
+The documentation is generated with [Doxygen](http://doxygen.org/).  If CMake
+does not find Doxygen, the documentation will not be generated.
 
 
 ## Changelog
 
+ - Added `glfwVulkanSupported`, `glfwGetRequiredInstanceExtensions`,
+   `glfwGetInstanceProcAddress`, `glfwGetPhysicalDevicePresentationSupport` and
+   `glfwCreateWindowSurface` for platform independent Vulkan support
+ - Added `glfwSetWindowMonitor` for switching between windowed and full screen
+   modes and updating the monitor and desired video mode of full screen windows
+ - Added `glfwMaximizeWindow` and `GLFW_MAXIMIZED` for window maximization
+ - Added `glfwFocusWindow` for giving windows input focus
  - Added `glfwSetWindowSizeLimits` and `glfwSetWindowAspectRatio` for setting
    absolute and relative window size limits
  - Added `glfwGetKeyName` for querying the layout-specific name of printable
    keys
+ - Added `glfwWaitEventsTimeout` for waiting for events for a set amount of time
+ - Added `glfwSetWindowIcon` for setting the icon of a window
+ - Added `glfwGetTimerValue` and `glfwGetTimerFrequency` for raw timer access
+ - Added `GLFWuint64` for platform-independent 64-bit unsigned values
  - Added `GLFW_NO_API` for creating window without contexts
  - Added `GLFW_CONTEXT_NO_ERROR` context hint for `GL_KHR_no_error` support
+ - Added `GLFW_INCLUDE_VULKAN` for including the Vulkan header
  - Added `GLFW_TRUE` and `GLFW_FALSE` as client API independent boolean values
  - Added `glfwGetGLXWindow` to query the `GLXWindow` of a window
+ - Added icons to examples on Windows and OS X
  - Relaxed rules for native access header macros
  - Removed dependency on external OpenGL or OpenGL ES headers
+ - Removed `_GLFW_USE_OPENGL`, `_GLFW_USE_GLESV1` and `_GLFW_USE_GLESV2`
+   configuration macros
  - [Win32] Added support for Windows 8.1 per-monitor DPI
+ - [Win32] Bugfix: Window creation would segfault if video mode setting required
+                   the system to be restarted
+ - [Win32] Bugfix: MinGW import library lacked the `lib` prefix
+ - [Win32] Bugfix: Monitor connection and disconnection events were not reported
+                   when no windows existed
+ - [Win32] Bugfix: Activating or deactivating displays in software did not
+                   trigger monitor callback
+ - [Win32] Bugfix: No monitors were listed on headless and VMware guest systems
  - [Cocoa] Removed support for OS X 10.6
+ - [Cocoa] Bugfix: Full screen windows on secondary monitors were mispositioned
+ - [Cocoa] Bugfix: Connecting a joystick that reports no name would segfault
+ - [Cocoa] Bugfix: Modifier flags cache was not updated when window became key
+ - [Cocoa] Bugfix: Dead key character composition did not work
+ - [Cocoa] Bugfix: The CGL context was not released until the autorelease pool
+                   was drained by another function
  - [X11] Bugfix: Monitor connection and disconnection events were not reported
  - [X11] Bugfix: Decoding of UTF-8 text from XIM could continue past the end
+ - [X11] Bugfix: An XKB structure was leaked during `glfwInit`
+ - [X11] Bugfix: XInput2 `XI_Motion` events interfered with the Steam overlay
  - [POSIX] Bugfix: An unrelated TLS key could be deleted by `glfwTerminate`
+ - [WGL] Changed extension loading to only be performed once
  - [WGL] Removed dependency on external WGL headers
- - [GLX] Replaced legacy renderable with `GLXWindow`
+ - [GLX] Replaced legacy drawable with `GLXWindow`
  - [GLX] Removed dependency on external GLX headers
  - [GLX] Bugfix: NetBSD does not provide `libGL.so.1`
+ - [EGL] Added `_GLFW_USE_EGLPLATFORM_H` configuration macro for controlling
+         whether to use an existing `EGL/eglplatform.h` header
+ - [EGL] Added and documented test for if the context is current on the calling
+         thread during buffer swap
  - [EGL] Removed dependency on external EGL headers
 
 
@@ -129,6 +175,7 @@ skills.
  - Paul R. Deppe
  - Michael Dickens
  - Роман Донченко
+ - Mario Dorn
  - Jonathan Dummer
  - Ralph Eastwood
  - Siavash Eliasi
@@ -149,6 +196,7 @@ skills.
  - Osman Keskin
  - Cameron King
  - Peter Knut
+ - Christoph Kubisch
  - Eric Larson
  - Robin Leffmann
  - Glenn Lewis
@@ -158,6 +206,7 @@ skills.
  - Martins Mozeiko
  - Tristam MacDonald
  - Hans Mackowiak
+ - Zbigniew Mandziejewicz
  - Kyle McDonald
  - David Medlock
  - Bryce Mehring
@@ -177,6 +226,7 @@ skills.
  - Peoro
  - Braden Pellett
  - Arturo J. Pérez
+ - Orson Peters
  - Emmanuel Gil Peyrot
  - Cyril Pichard
  - Pieroman
@@ -190,6 +240,7 @@ skills.
  - SephiRok
  - Steve Sexton
  - Systemcluster
+ - Yoshiki Shibukawa
  - Dmitri Shuralyov
  - Daniel Skorupski
  - Bradley Smith
@@ -201,13 +252,16 @@ skills.
  - TTK-Bandit
  - Sergey Tikhomirov
  - A. Tombs
+ - Ioannis Tsakpinis
  - Samuli Tuomola
  - urraka
  - Jari Vetoniemi
  - Ricardo Vieira
+ - Nicholas Vitovitch
  - Simon Voordouw
  - Torsten Walluhn
  - Patrick Walton
+ - Xo Wang
  - Jay Weisskopf
  - Frank Wille
  - yuriks

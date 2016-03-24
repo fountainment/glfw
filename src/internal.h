@@ -41,11 +41,22 @@
     defined(GLFW_INCLUDE_GLEXT)     || \
     defined(GLFW_INCLUDE_GLU)       || \
     defined(GLFW_DLL)
- #error "You may not define any header option macros when compiling GLFW"
+ #error "You must not define any header option macros when compiling GLFW"
 #endif
 
 #define GLFW_INCLUDE_NONE
 #include "../include/GLFW/glfw3.h"
+
+typedef int GLFWbool;
+
+typedef struct _GLFWwndconfig   _GLFWwndconfig;
+typedef struct _GLFWctxconfig   _GLFWctxconfig;
+typedef struct _GLFWfbconfig    _GLFWfbconfig;
+typedef struct _GLFWcontext     _GLFWcontext;
+typedef struct _GLFWwindow      _GLFWwindow;
+typedef struct _GLFWlibrary     _GLFWlibrary;
+typedef struct _GLFWmonitor     _GLFWmonitor;
+typedef struct _GLFWcursor      _GLFWcursor;
 
 #define GL_VERSION 0x1f02
 #define GL_NONE	0
@@ -76,16 +87,66 @@ typedef const GLubyte* (APIENTRY * PFNGLGETSTRINGPROC)(GLenum);
 typedef void (APIENTRY * PFNGLGETINTEGERVPROC)(GLenum,GLint*);
 typedef const GLubyte* (APIENTRY * PFNGLGETSTRINGIPROC)(GLenum,GLuint);
 
-typedef struct _GLFWwndconfig   _GLFWwndconfig;
-typedef struct _GLFWctxconfig   _GLFWctxconfig;
-typedef struct _GLFWfbconfig    _GLFWfbconfig;
-typedef struct _GLFWcontext     _GLFWcontext;
-typedef struct _GLFWwindow      _GLFWwindow;
-typedef struct _GLFWlibrary     _GLFWlibrary;
-typedef struct _GLFWmonitor     _GLFWmonitor;
-typedef struct _GLFWcursor      _GLFWcursor;
+#define VK_NULL_HANDLE 0
 
-typedef int GLFWbool;
+typedef void* VkInstance;
+typedef void* VkPhysicalDevice;
+typedef GLFWuint64 VkSurfaceKHR;
+typedef unsigned int VkFlags;
+typedef unsigned int VkBool32;
+
+typedef enum VkStructureType
+{
+    VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR = 1000004000,
+    VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR = 1000005000,
+    VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR = 1000006000,
+    VK_STRUCTURE_TYPE_MIR_SURFACE_CREATE_INFO_KHR = 1000007000,
+    VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR = 1000009000,
+    VK_STRUCTURE_TYPE_MAX_ENUM = 0x7FFFFFFF
+} VkStructureType;
+
+typedef enum VkResult
+{
+    VK_SUCCESS = 0,
+    VK_NOT_READY = 1,
+    VK_TIMEOUT = 2,
+    VK_EVENT_SET = 3,
+    VK_EVENT_RESET = 4,
+    VK_INCOMPLETE = 5,
+    VK_ERROR_OUT_OF_HOST_MEMORY = -1,
+    VK_ERROR_OUT_OF_DEVICE_MEMORY = -2,
+    VK_ERROR_INITIALIZATION_FAILED = -3,
+    VK_ERROR_DEVICE_LOST = -4,
+    VK_ERROR_MEMORY_MAP_FAILED = -5,
+    VK_ERROR_LAYER_NOT_PRESENT = -6,
+    VK_ERROR_EXTENSION_NOT_PRESENT = -7,
+    VK_ERROR_FEATURE_NOT_PRESENT = -8,
+    VK_ERROR_INCOMPATIBLE_DRIVER = -9,
+    VK_ERROR_TOO_MANY_OBJECTS = -10,
+    VK_ERROR_FORMAT_NOT_SUPPORTED = -11,
+    VK_ERROR_SURFACE_LOST_KHR = -1000000000,
+    VK_SUBOPTIMAL_KHR = 1000001003,
+    VK_ERROR_OUT_OF_DATE_KHR = -1000001004,
+    VK_ERROR_INCOMPATIBLE_DISPLAY_KHR = -1000003001,
+    VK_ERROR_NATIVE_WINDOW_IN_USE_KHR = -1000000001,
+    VK_ERROR_VALIDATION_FAILED_EXT = -1000011001,
+    VK_RESULT_MAX_ENUM = 0x7FFFFFFF
+} VkResult;
+
+typedef struct VkAllocationCallbacks VkAllocationCallbacks;
+
+typedef struct VkExtensionProperties
+{
+    char            extensionName[256];
+    unsigned int    specVersion;
+} VkExtensionProperties;
+
+typedef void (APIENTRY * PFN_vkVoidFunction)(void);
+typedef PFN_vkVoidFunction (APIENTRY * PFN_vkGetInstanceProcAddr)(VkInstance,const char*);
+typedef VkResult (APIENTRY * PFN_vkEnumerateInstanceExtensionProperties)(const char*,unsigned int*,VkExtensionProperties*);
+
+#define vkEnumerateInstanceExtensionProperties _glfw.vk.EnumerateInstanceExtensionProperties
+#define vkGetInstanceProcAddr _glfw.vk.GetInstanceProcAddr
 
 #if defined(_GLFW_COCOA)
  #include "cocoa_platform.h"
@@ -124,7 +185,7 @@ typedef int GLFWbool;
  *  @brief Various utility functions for internal use.
  *
  *  These functions are shared code and may be used by any part of GLFW
- *  Each platform may add its own utility functions, but those may only be
+ *  Each platform may add its own utility functions, but those must only be
  *  called by the platform-specific code
  */
 
@@ -185,7 +246,7 @@ struct _GLFWwndconfig
     GLFWbool      focused;
     GLFWbool      autoIconify;
     GLFWbool      floating;
-    _GLFWmonitor* monitor;
+    GLFWbool      maximized;
 };
 
 
@@ -231,10 +292,10 @@ struct _GLFWfbconfig
     int         accumBlueBits;
     int         accumAlphaBits;
     int         auxBuffers;
-    int         stereo;
+    GLFWbool    stereo;
     int         samples;
-    int         sRGB;
-    int         doublebuffer;
+    GLFWbool    sRGB;
+    GLFWbool    doublebuffer;
 
     // This is defined in the context API's context.h
     _GLFW_PLATFORM_FBCONFIG;
@@ -278,6 +339,10 @@ struct _GLFWwindow
     _GLFWmonitor*       monitor;
     _GLFWcursor*        cursor;
 
+    int                 minwidth, minheight;
+    int                 maxwidth, maxheight;
+    int                 numer, denom;
+
     // Window input state
     GLFWbool            stickyKeys;
     GLFWbool            stickyMouseButtons;
@@ -319,6 +384,9 @@ struct _GLFWmonitor
 
     // Physical dimensions in millimeters.
     int             widthMM, heightMM;
+
+    // The window whose video mode is current on this monitor
+    _GLFWwindow*    window;
 
     GLFWvidmode*    modes;
     int             modeCount;
@@ -362,6 +430,23 @@ struct _GLFWlibrary
 
     _GLFWmonitor**      monitors;
     int                 monitorCount;
+
+    GLFWuint64          timerOffset;
+
+    struct {
+        GLFWbool        available;
+        void*           handle;
+        char**          extensions;
+        unsigned int    extensionCount;
+        PFN_vkEnumerateInstanceExtensionProperties EnumerateInstanceExtensionProperties;
+        PFN_vkGetInstanceProcAddr GetInstanceProcAddr;
+        GLFWbool        KHR_surface;
+        GLFWbool        KHR_win32_surface;
+        GLFWbool        KHR_xlib_surface;
+        GLFWbool        KHR_xcb_surface;
+        GLFWbool        KHR_wayland_surface;
+        GLFWbool        KHR_mir_surface;
+    } vk;
 
     struct {
         GLFWmonitorfun  monitor;
@@ -512,15 +597,15 @@ const unsigned char* _glfwPlatformGetJoystickButtons(int joy, int* count);
  */
 const char* _glfwPlatformGetJoystickName(int joy);
 
-/*! @copydoc glfwGetTime
+/*! @copydoc glfwGetTimerValue
  *  @ingroup platform
  */
-double _glfwPlatformGetTime(void);
+GLFWuint64 _glfwPlatformGetTimerValue(void);
 
-/*! @copydoc glfwSetTime
+/*! @copydoc glfwGetTimerFrequency
  *  @ingroup platform
  */
-void _glfwPlatformSetTime(double time);
+GLFWuint64 _glfwPlatformGetTimerFrequency(void);
 
 /*! @ingroup platform
  */
@@ -537,6 +622,11 @@ void _glfwPlatformDestroyWindow(_GLFWwindow* window);
  *  @ingroup platform
  */
 void _glfwPlatformSetWindowTitle(_GLFWwindow* window, const char* title);
+
+/*! @copydoc glfwSetWindowIcon
+ *  @ingroup platform
+ */
+void _glfwPlatformSetWindowIcon(_GLFWwindow* window, int count, const GLFWimage* images);
 
 /*! @copydoc glfwGetWindowPos
  *  @ingroup platform
@@ -588,19 +678,30 @@ void _glfwPlatformIconifyWindow(_GLFWwindow* window);
  */
 void _glfwPlatformRestoreWindow(_GLFWwindow* window);
 
+/*! @copydoc glfwMaximizeWindow
+ *  @ingroup platform
+ */
+void _glfwPlatformMaximizeWindow(_GLFWwindow* window);
+
 /*! @copydoc glfwShowWindow
  *  @ingroup platform
  */
 void _glfwPlatformShowWindow(_GLFWwindow* window);
 
-/*! @ingroup platform
- */
-void _glfwPlatformUnhideWindow(_GLFWwindow* window);
-
 /*! @copydoc glfwHideWindow
  *  @ingroup platform
  */
 void _glfwPlatformHideWindow(_GLFWwindow* window);
+
+/*! @copydoc glfwFocusWindow
+ *  @ingroup platform
+ */
+void _glfwPlatformFocusWindow(_GLFWwindow* window);
+
+/*! @copydoc glfwSetWindowMonitor
+ *  @ingroup platform
+ */
+void _glfwPlatformSetWindowMonitor(_GLFWwindow* window, _GLFWmonitor* monitor, int xpos, int ypos, int width, int height, int refreshRate);
 
 /*! @brief Returns whether the window is focused.
  *  @ingroup platform
@@ -617,6 +718,11 @@ int _glfwPlatformWindowIconified(_GLFWwindow* window);
  */
 int _glfwPlatformWindowVisible(_GLFWwindow* window);
 
+/*! @brief Returns whether the window is maximized.
+ *  @ingroup platform
+ */
+int _glfwPlatformWindowMaximized(_GLFWwindow* window);
+
 /*! @copydoc glfwPollEvents
  *  @ingroup platform
  */
@@ -627,6 +733,11 @@ void _glfwPlatformPollEvents(void);
  */
 void _glfwPlatformWaitEvents(void);
 
+/*! @copydoc glfwWaitEventsTimeout
+ *  @ingroup platform
+ */
+void _glfwPlatformWaitEventsTimeout(double timeout);
+
 /*! @copydoc glfwPostEmptyEvent
  *  @ingroup platform
  */
@@ -636,6 +747,10 @@ void _glfwPlatformPostEmptyEvent(void);
  *  @ingroup platform
  */
 void _glfwPlatformMakeContextCurrent(_GLFWwindow* window);
+
+/*! @ingroup platform
+ */
+void _glfwPlatformSetCurrentContext(_GLFWwindow* context);
 
 /*! @copydoc glfwGetCurrentContext
  *  @ingroup platform
@@ -681,6 +796,18 @@ void _glfwPlatformDestroyCursor(_GLFWcursor* cursor);
  *  @ingroup platform
  */
 void _glfwPlatformSetCursor(_GLFWwindow* window, _GLFWcursor* cursor);
+
+/*! @ingroup platform
+ */
+char** _glfwPlatformGetRequiredInstanceExtensions(unsigned int* count);
+
+/*! @ingroup platform
+ */
+int _glfwPlatformGetPhysicalDevicePresentationSupport(VkInstance instance, VkPhysicalDevice device, unsigned int queuefamily);
+
+/*! @ingroup platform
+ */
+VkResult _glfwPlatformCreateWindowSurface(VkInstance instance, _GLFWwindow* window, const VkAllocationCallbacks* allocator, VkSurfaceKHR* surface);
 
 
 //========================================================================
@@ -737,6 +864,8 @@ void _glfwInputWindowDamage(_GLFWwindow* window);
  *  @ingroup event
  */
 void _glfwInputWindowCloseRequest(_GLFWwindow* window);
+
+void _glfwInputWindowMonitorChange(_GLFWwindow* window, _GLFWmonitor* monitor);
 
 /*! @brief Notifies shared code of a physical key event.
  *  @param[in] window The window that received the event.
@@ -795,6 +924,10 @@ void _glfwInputCursorEnter(_GLFWwindow* window, GLFWbool entered);
 /*! @ingroup event
  */
 void _glfwInputMonitorChange(void);
+
+/*! @ingroup event
+ */
+void _glfwInputMonitorWindowChange(_GLFWmonitor* monitor, _GLFWwindow* window);
 
 /*! @brief Notifies shared code of an error.
  *  @param[in] error The error code most suitable for the error.
@@ -914,6 +1047,18 @@ void _glfwFreeMonitors(_GLFWmonitor** monitors, int count);
 
 /*! @ingroup utility
  */
-int _glfwIsPrintable(int key);
+GLFWbool _glfwIsPrintable(int key);
+
+/*! @ingroup utility
+ */
+void _glfwInitVulkan(void);
+
+/*! @ingroup utility
+ */
+void _glfwTerminateVulkan(void);
+
+/*! @ingroup utility
+ */
+const char* _glfwGetVulkanResultString(VkResult result);
 
 #endif // _glfw3_internal_h_

@@ -38,12 +38,11 @@
 typedef struct _GLFWtimePOSIX
 {
     GLFWbool    monotonic;
-    double      resolution;
-    uint64_t    base;
+    GLFWuint64  frequency;
 
 } _GLFWtimePOSIX;
 
 
-void _glfwInitTimer(void);
+void _glfwInitTimerPOSIX(void);
 
 #endif // _glfw3_posix_time_h_
