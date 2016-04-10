@@ -54,11 +54,19 @@
 void selectDisplayConnection(struct timeval* timeout)
 {
     fd_set fds;
-    int result;
+    int result, count;
     const int fd = ConnectionNumber(_glfw.x11.display);
 
     FD_ZERO(&fds);
     FD_SET(fd, &fds);
+#if defined(__linux__)
+    FD_SET(_glfw.linux_js.inotify, &fds);
+#endif
+
+    if (fd > _glfw.linux_js.inotify)
+        count = fd + 1;
+    else
+        count = _glfw.linux_js.inotify + 1;
 
     // NOTE: We use select instead of an X function like XNextEvent, as the
     //       wait inside those are guarded by the mutex protecting the display
@@ -68,7 +76,7 @@ void selectDisplayConnection(struct timeval* timeout)
     // TODO: Update timeout value manually
     do
     {
-        result = select(fd + 1, &fds, NULL, NULL, timeout);
+        result = select(count, &fds, NULL, NULL, timeout);
     }
     while (result == -1 && errno == EINTR && timeout == NULL);
 }
@@ -210,9 +218,9 @@ static void updateNormalHints(_GLFWwindow* window)
         if (window->resizable)
         {
             if (window->minwidth != GLFW_DONT_CARE &&
-                window->minwidth != GLFW_DONT_CARE &&
+                window->minheight != GLFW_DONT_CARE &&
                 window->maxwidth != GLFW_DONT_CARE &&
-                window->maxwidth != GLFW_DONT_CARE)
+                window->maxheight != GLFW_DONT_CARE)
             {
                 hints->flags |= (PMinSize | PMaxSize);
                 hints->min_width  = window->minwidth;
@@ -1763,7 +1771,7 @@ void _glfwPlatformGetWindowFrameSize(_GLFWwindow* window,
     if (!_glfwPlatformWindowVisible(window) &&
         _glfw.x11.NET_REQUEST_FRAME_EXTENTS)
     {
-        GLFWuint64 base;
+        uint64_t base;
         XEvent event;
 
         // Ensure _NET_FRAME_EXTENTS is set, allowing glfwGetWindowFrameSize to
@@ -1999,6 +2007,8 @@ int _glfwPlatformWindowMaximized(_GLFWwindow* window)
 
 void _glfwPlatformPollEvents(void)
 {
+    _glfwPollJoystickEvents();
+
     int count = XPending(_glfw.x11.display);
     while (count--)
     {
@@ -2273,7 +2283,7 @@ const char* _glfwPlatformGetClipboardString(_GLFWwindow* window)
     return _glfw.x11.clipboardString;
 }
 
-char** _glfwPlatformGetRequiredInstanceExtensions(unsigned int* count)
+char** _glfwPlatformGetRequiredInstanceExtensions(uint32_t* count)
 {
     char** extensions;
 
@@ -2299,7 +2309,7 @@ char** _glfwPlatformGetRequiredInstanceExtensions(unsigned int* count)
 
 int _glfwPlatformGetPhysicalDevicePresentationSupport(VkInstance instance,
                                                       VkPhysicalDevice device,
-                                                      unsigned int queuefamily)
+                                                      uint32_t queuefamily)
 {
     VisualID visualID = XVisualIDFromVisual(DefaultVisual(_glfw.x11.display,
                                                           _glfw.x11.screen));

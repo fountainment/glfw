@@ -369,24 +369,40 @@ static void releaseMonitor(_GLFWwindow* window)
 static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
                                    WPARAM wParam, LPARAM lParam)
 {
-    _GLFWwindow* window = (_GLFWwindow*) GetWindowLongPtrW(hWnd, 0);
+    _GLFWwindow* window = (_GLFWwindow*) GetPropW(hWnd, L"GLFW");
     if (!window)
     {
         // This is the message handling for the hidden helper window
 
         switch (uMsg)
         {
-            case WM_NCCREATE:
+            case WM_DEVICECHANGE:
             {
-                CREATESTRUCTW* cs = (CREATESTRUCTW*) lParam;
-                SetWindowLongPtrW(hWnd, 0, (LONG_PTR) cs->lpCreateParams);
-                break;
-            }
+                if (wParam == DBT_DEVNODES_CHANGED)
+                {
+                    _glfwInputMonitorChange();
+                    return TRUE;
+                }
+                else if (wParam == DBT_DEVICEARRIVAL)
+                {
+                    DEV_BROADCAST_HDR* dbh = (DEV_BROADCAST_HDR*) lParam;
+                    if (dbh)
+                    {
+                        if (dbh->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE)
+                            _glfwDetectJoystickConnectionWin32();
+                    }
+                }
+                else if (wParam == DBT_DEVICEREMOVECOMPLETE)
+                {
+                    DEV_BROADCAST_HDR* dbh = (DEV_BROADCAST_HDR*) lParam;
+                    if (dbh)
+                    {
+                        if (dbh->dbch_devicetype == DBT_DEVTYP_DEVICEINTERFACE)
+                            _glfwDetectJoystickDisconnectionWin32();
+                    }
+                }
 
-            case WM_DISPLAYCHANGE:
-            {
-                _glfwInputMonitorChange();
-                return 0;
+                break;
             }
         }
 
@@ -815,7 +831,7 @@ static int createWindow(_GLFWwindow* window, const _GLFWwndconfig* wndconfig)
                                            NULL, // No parent window
                                            NULL, // No window menu
                                            GetModuleHandleW(NULL),
-                                           window); // Pass object to WM_CREATE
+                                           NULL);
 
     free(wideTitle);
 
@@ -824,6 +840,8 @@ static int createWindow(_GLFWwindow* window, const _GLFWwndconfig* wndconfig)
         _glfwInputError(GLFW_PLATFORM_ERROR, "Win32: Failed to create window");
         return GLFW_FALSE;
     }
+
+    SetPropW(window->win32.handle, L"GLFW", window);
 
     if (_glfw_ChangeWindowMessageFilterEx)
     {
@@ -846,6 +864,7 @@ static void destroyWindow(_GLFWwindow* window)
 {
     if (window->win32.handle)
     {
+        RemovePropW(window->win32.handle, L"GLFW");
         DestroyWindow(window->win32.handle);
         window->win32.handle = NULL;
     }
@@ -866,7 +885,6 @@ GLFWbool _glfwRegisterWindowClassWin32(void)
     wc.cbSize        = sizeof(wc);
     wc.style         = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
     wc.lpfnWndProc   = (WNDPROC) windowProc;
-    wc.cbWndExtra    = sizeof(void*) + sizeof(int); // Make room for one pointer
     wc.hInstance     = GetModuleHandleW(NULL);
     wc.hCursor       = LoadCursorW(NULL, IDC_ARROW);
     wc.lpszClassName = _GLFW_WNDCLASSNAME;
@@ -1230,14 +1248,14 @@ void _glfwPlatformSetWindowMonitor(_GLFWwindow* window,
     if (monitor)
     {
         GLFWvidmode mode;
-        DWORD style = GetWindowLongPtrW(window->win32.handle, GWL_STYLE);
+        DWORD style = GetWindowLongW(window->win32.handle, GWL_STYLE);
         UINT flags = SWP_SHOWWINDOW | SWP_NOACTIVATE | SWP_NOCOPYBITS;
 
         if (window->decorated)
         {
             style &= ~WS_OVERLAPPEDWINDOW;
             style |= getWindowStyle(window);
-            SetWindowLongPtrW(window->win32.handle, GWL_STYLE, style);
+            SetWindowLongW(window->win32.handle, GWL_STYLE, style);
 
             flags |= SWP_FRAMECHANGED;
         }
@@ -1255,14 +1273,14 @@ void _glfwPlatformSetWindowMonitor(_GLFWwindow* window,
     {
         HWND after;
         RECT rect = { xpos, ypos, xpos + width, ypos + height };
-        DWORD style = GetWindowLongPtrW(window->win32.handle, GWL_STYLE);
+        DWORD style = GetWindowLongW(window->win32.handle, GWL_STYLE);
         UINT flags = SWP_NOACTIVATE | SWP_NOCOPYBITS;
 
         if (window->decorated)
         {
             style &= ~WS_POPUP;
             style |= getWindowStyle(window);
-            SetWindowLongPtrW(window->win32.handle, GWL_STYLE, style);
+            SetWindowLongW(window->win32.handle, GWL_STYLE, style);
 
             flags |= SWP_FRAMECHANGED;
         }
@@ -1606,7 +1624,7 @@ const char* _glfwPlatformGetClipboardString(_GLFWwindow* window)
     return _glfw.win32.clipboardString;
 }
 
-char** _glfwPlatformGetRequiredInstanceExtensions(unsigned int* count)
+char** _glfwPlatformGetRequiredInstanceExtensions(uint32_t* count)
 {
     char** extensions;
 
@@ -1625,7 +1643,7 @@ char** _glfwPlatformGetRequiredInstanceExtensions(unsigned int* count)
 
 int _glfwPlatformGetPhysicalDevicePresentationSupport(VkInstance instance,
                                                       VkPhysicalDevice device,
-                                                      unsigned int queuefamily)
+                                                      uint32_t queuefamily)
 {
     PFN_vkGetPhysicalDeviceWin32PresentationSupportKHR vkGetPhysicalDeviceWin32PresentationSupportKHR =
         (PFN_vkGetPhysicalDeviceWin32PresentationSupportKHR)

@@ -120,6 +120,7 @@ extern "C" {
  * Include it unconditionally to avoid surprising side-effects.
  */
 #include <stddef.h>
+#include <stdint.h>
 
 /* Include the chosen client API headers.
  */
@@ -728,19 +729,6 @@ extern "C" {
  * GLFW API types
  *************************************************************************/
 
-/*! @brief 64-bit unsigned integer.
- *
- *  64-bit unsigned integer.
- *
- *  @since Added in version 3.2.
- */
-#if defined(_MSC_VER) && (_MSC_VER < 1600)
-typedef unsigned __int64 GLFWuint64;
-#else
- #include <stdint.h>
-typedef uint64_t GLFWuint64;
-#endif
-
 /*! @brief Client API function pointer type.
  *
  *  Generic function pointer used for returning client API function pointers
@@ -1108,6 +1096,23 @@ typedef void (* GLFWdropfun)(GLFWwindow*,int,const char**);
  *  @ingroup monitor
  */
 typedef void (* GLFWmonitorfun)(GLFWmonitor*,int);
+
+/*! @brief The function signature for joystick configuration callbacks.
+ *
+ *  This is the function signature for joystick configuration callback
+ *  functions.
+ *
+ *  @param[in] joy The joystick that was connected or disconnected.
+ *  @param[in] event One of `GLFW_CONNECTED` or `GLFW_DISCONNECTED`.
+ *
+ *  @sa @ref joystick_event
+ *  @sa glfwSetJoystickCallback
+ *
+ *  @since Added in version 3.2.
+ *
+ *  @ingroup input
+ */
+typedef void (* GLFWjoystickfun)(int,int);
 
 /*! @brief Video mode type.
  *
@@ -3608,6 +3613,29 @@ GLFWAPI const unsigned char* glfwGetJoystickButtons(int joy, int* count);
  */
 GLFWAPI const char* glfwGetJoystickName(int joy);
 
+/*! @brief Sets the joystick configuration callback.
+ *
+ *  This function sets the joystick configuration callback, or removes the
+ *  currently set callback.  This is called when a joystick is connected to or
+ *  disconnected from the system.
+ *
+ *  @param[in] cbfun The new callback, or `NULL` to remove the currently set
+ *  callback.
+ *  @return The previously set callback, or `NULL` if no callback was set or the
+ *  library had not been [initialized](@ref intro_init).
+ *
+ *  @errors Possible errors include @ref GLFW_NOT_INITIALIZED.
+ *
+ *  @thread_safety This function must only be called from the main thread.
+ *
+ *  @sa @ref joystick_event
+ *
+ *  @since Added in version 3.2.
+ *
+ *  @ingroup input
+ */
+GLFWAPI GLFWjoystickfun glfwSetJoystickCallback(GLFWjoystickfun cbfun);
+
 /*! @brief Sets the clipboard to the specified string.
  *
  *  This function sets the system clipboard to the specified, UTF-8 encoded
@@ -3735,7 +3763,7 @@ GLFWAPI void glfwSetTime(double time);
  *
  *  @ingroup input
  */
-GLFWAPI GLFWuint64 glfwGetTimerValue(void);
+GLFWAPI uint64_t glfwGetTimerValue(void);
 
 /*! @brief Returns the frequency, in Hz, of the raw timer.
  *
@@ -3755,7 +3783,7 @@ GLFWAPI GLFWuint64 glfwGetTimerValue(void);
  *
  *  @ingroup input
  */
-GLFWAPI GLFWuint64 glfwGetTimerFrequency(void);
+GLFWAPI uint64_t glfwGetTimerFrequency(void);
 
 /*! @brief Makes the context of the specified window current for the calling
  *  thread.
@@ -4041,7 +4069,7 @@ GLFWAPI int glfwVulkanSupported(void);
  *
  *  @ingroup vulkan
  */
-GLFWAPI const char** glfwGetRequiredInstanceExtensions(unsigned int* count);
+GLFWAPI const char** glfwGetRequiredInstanceExtensions(uint32_t* count);
 
 #if defined(VK_VERSION_1_0)
 
