@@ -55,7 +55,32 @@ static void handleConfigure(void* data,
                             int32_t height)
 {
     _GLFWwindow* window = data;
-    _glfwInputFramebufferSize(window, width, height);
+    float aspectRatio;
+    float targetRatio;
+
+    if (!window->monitor)
+    {
+        if (window->numer != GLFW_DONT_CARE && window->denom != GLFW_DONT_CARE)
+        {
+            aspectRatio = (float)width / (float)height;
+            targetRatio = (float)window->numer / (float)window->denom;
+            if (aspectRatio < targetRatio)
+                height = width / targetRatio;
+            else if (aspectRatio > targetRatio)
+                width = height * targetRatio;
+        }
+
+        if (window->minwidth != GLFW_DONT_CARE && width < window->minwidth)
+            width = window->minwidth;
+        else if (window->maxwidth != GLFW_DONT_CARE && width > window->maxwidth)
+            width = window->maxwidth;
+
+        if (window->minheight != GLFW_DONT_CARE && height < window->minheight)
+            height = window->minheight;
+        else if (window->maxheight != GLFW_DONT_CARE && height > window->maxheight)
+            height = window->maxheight;
+    }
+
     _glfwInputWindowSize(window, width, height);
     _glfwPlatformSetWindowSize(window, width, height);
     _glfwInputWindowDamage(window);
@@ -168,6 +193,15 @@ static GLFWbool createSurface(_GLFWwindow* window,
     if (!window->wl.native)
         return GLFW_FALSE;
 
+    window->wl.width = wndconfig->width;
+    window->wl.height = wndconfig->height;
+    window->wl.scale = 1;
+
+    return GLFW_TRUE;
+}
+
+static GLFWbool createShellSurface(_GLFWwindow* window)
+{
     window->wl.shell_surface = wl_shell_get_shell_surface(_glfw.wl.shell,
                                                           window->wl.surface);
     if (!window->wl.shell_surface)
@@ -177,9 +211,25 @@ static GLFWbool createSurface(_GLFWwindow* window,
                                   &shellSurfaceListener,
                                   window);
 
-    window->wl.width = wndconfig->width;
-    window->wl.height = wndconfig->height;
-    window->wl.scale = 1;
+    if (window->wl.title)
+        wl_shell_surface_set_title(window->wl.shell_surface, window->wl.title);
+
+    if (window->monitor)
+    {
+        wl_shell_surface_set_fullscreen(
+            window->wl.shell_surface,
+            WL_SHELL_SURFACE_FULLSCREEN_METHOD_DEFAULT,
+            0,
+            window->monitor->wl.output);
+    }
+    else if (window->wl.maximized)
+    {
+        wl_shell_surface_set_maximized(window->wl.shell_surface, NULL);
+    }
+    else
+    {
+        wl_shell_surface_set_toplevel(window->wl.shell_surface);
+    }
 
     return GLFW_TRUE;
 }
@@ -329,17 +379,20 @@ int _glfwPlatformCreateWindow(_GLFWwindow* window,
             return GLFW_FALSE;
     }
 
-    if (window->monitor)
+    if (wndconfig->title)
+        window->wl.title = strdup(wndconfig->title);
+
+    if (wndconfig->visible)
     {
-        wl_shell_surface_set_fullscreen(
-            window->wl.shell_surface,
-            WL_SHELL_SURFACE_FULLSCREEN_METHOD_DEFAULT,
-            0,
-            window->monitor->wl.output);
+        if (!createShellSurface(window))
+            return GLFW_FALSE;
+
+        window->wl.visible = GLFW_TRUE;
     }
     else
     {
-        wl_shell_surface_set_toplevel(window->wl.shell_surface);
+        window->wl.shell_surface = NULL;
+        window->wl.visible = GLFW_FALSE;
     }
 
     window->wl.currentCursor = NULL;
@@ -375,19 +428,24 @@ void _glfwPlatformDestroyWindow(_GLFWwindow* window)
     if (window->wl.surface)
         wl_surface_destroy(window->wl.surface);
 
+    free(window->wl.title);
     free(window->wl.monitors);
 }
 
 void _glfwPlatformSetWindowTitle(_GLFWwindow* window, const char* title)
 {
-    wl_shell_surface_set_title(window->wl.shell_surface, title);
+    if (window->wl.title)
+        free(window->wl.title);
+    window->wl.title = strdup(title);
+    if (window->wl.shell_surface)
+        wl_shell_surface_set_title(window->wl.shell_surface, title);
 }
 
 void _glfwPlatformSetWindowIcon(_GLFWwindow* window,
                                 int count, const GLFWimage* images)
 {
-    // TODO
-    fprintf(stderr, "_glfwPlatformSetWindowIcon not implemented yet\n");
+    _glfwInputError(GLFW_PLATFORM_ERROR,
+                    "Wayland: Setting window icon not supported");
 }
 
 void _glfwPlatformGetWindowPos(_GLFWwindow* window, int* xpos, int* ypos)
@@ -429,14 +487,14 @@ void _glfwPlatformSetWindowSizeLimits(_GLFWwindow* window,
                                       int minwidth, int minheight,
                                       int maxwidth, int maxheight)
 {
-    // TODO
-    fprintf(stderr, "_glfwPlatformSetWindowSizeLimits not implemented yet\n");
+    // TODO: find out how to trigger a resize.
+    // The actual limits are checked in the wl_shell_surface::configure handler.
 }
 
 void _glfwPlatformSetWindowAspectRatio(_GLFWwindow* window, int numer, int denom)
 {
-    // TODO
-    fprintf(stderr, "_glfwPlatformSetWindowAspectRatio not implemented yet\n");
+    // TODO: find out how to trigger a resize.
+    // The actual limits are checked in the wl_shell_surface::configure handler.
 }
 
 void _glfwPlatformGetFramebufferSize(_GLFWwindow* window, int* width, int* height)
@@ -450,43 +508,66 @@ void _glfwPlatformGetWindowFrameSize(_GLFWwindow* window,
                                      int* left, int* top,
                                      int* right, int* bottom)
 {
-    // TODO
-    fprintf(stderr, "_glfwPlatformGetWindowFrameSize not implemented yet\n");
+    // TODO: will need a proper implementation once decorations are
+    // implemented, but for now just leave everything as 0.
 }
 
 void _glfwPlatformIconifyWindow(_GLFWwindow* window)
 {
-    // TODO
-    fprintf(stderr, "_glfwPlatformIconifyWindow not implemented yet\n");
+    // TODO: move to xdg_shell instead of wl_shell.
+    _glfwInputError(GLFW_PLATFORM_ERROR,
+                    "Wayland: Iconify window not supported");
 }
 
 void _glfwPlatformRestoreWindow(_GLFWwindow* window)
 {
-    // TODO
-    fprintf(stderr, "_glfwPlatformRestoreWindow not implemented yet\n");
+    // TODO: also do the same for iconified.
+    if (window->monitor || window->wl.maximized)
+    {
+        if (window->wl.shell_surface)
+            wl_shell_surface_set_toplevel(window->wl.shell_surface);
+
+        window->wl.maximized = GLFW_FALSE;
+    }
 }
 
 void _glfwPlatformMaximizeWindow(_GLFWwindow* window)
 {
-    // TODO
-    fprintf(stderr, "_glfwPlatformMaximizeWindow not implemented yet\n");
+    if (!window->monitor && !window->wl.maximized)
+    {
+        if (window->wl.shell_surface)
+        {
+            // Let the compositor select the best output.
+            wl_shell_surface_set_maximized(window->wl.shell_surface, NULL);
+        }
+        window->wl.maximized = GLFW_TRUE;
+    }
 }
 
 void _glfwPlatformShowWindow(_GLFWwindow* window)
 {
-    wl_shell_surface_set_toplevel(window->wl.shell_surface);
+    if (!window->monitor)
+    {
+        if (!window->wl.shell_surface)
+            createShellSurface(window);
+        window->wl.visible = GLFW_TRUE;
+    }
 }
 
 void _glfwPlatformHideWindow(_GLFWwindow* window)
 {
-    wl_surface_attach(window->wl.surface, NULL, 0, 0);
-    wl_surface_commit(window->wl.surface);
+    if (!window->monitor)
+    {
+        if (window->wl.shell_surface)
+            wl_shell_surface_destroy(window->wl.shell_surface);
+        window->wl.visible = GLFW_FALSE;
+    }
 }
 
 void _glfwPlatformFocusWindow(_GLFWwindow* window)
 {
-    // TODO
-    fprintf(stderr, "_glfwPlatformFocusWindow not implemented yet\n");
+    _glfwInputError(GLFW_PLATFORM_ERROR,
+                    "Wayland: Focusing a window requires user interaction");
 }
 
 void _glfwPlatformSetWindowMonitor(_GLFWwindow* window,
@@ -495,32 +576,40 @@ void _glfwPlatformSetWindowMonitor(_GLFWwindow* window,
                                    int width, int height,
                                    int refreshRate)
 {
-    // TODO
-    fprintf(stderr, "_glfwPlatformSetWindowMonitor not implemented yet\n");
+    if (monitor)
+    {
+        wl_shell_surface_set_fullscreen(
+            window->wl.shell_surface,
+            WL_SHELL_SURFACE_FULLSCREEN_METHOD_DEFAULT,
+            refreshRate * 1000, // Convert Hz to mHz.
+            monitor->wl.output);
+    }
+    else
+    {
+        wl_shell_surface_set_toplevel(window->wl.shell_surface);
+    }
+    _glfwInputWindowMonitorChange(window, monitor);
 }
 
 int _glfwPlatformWindowFocused(_GLFWwindow* window)
 {
-    // TODO
-    return GLFW_FALSE;
+    return _glfw.wl.keyboardFocus == window;
 }
 
 int _glfwPlatformWindowIconified(_GLFWwindow* window)
 {
-    // TODO
+    // TODO: move to xdg_shell, wl_shell doesn't have any iconified concept.
     return GLFW_FALSE;
 }
 
 int _glfwPlatformWindowVisible(_GLFWwindow* window)
 {
-    // TODO
-    return GLFW_FALSE;
+    return window->wl.visible;
 }
 
 int _glfwPlatformWindowMaximized(_GLFWwindow* window)
 {
-    // TODO
-    return GLFW_FALSE;
+    return window->wl.maximized;
 }
 
 void _glfwPlatformPollEvents(void)
@@ -589,7 +678,7 @@ int _glfwPlatformCreateCursor(_GLFWcursor* cursor,
     if (fd < 0)
     {
         _glfwInputError(GLFW_PLATFORM_ERROR,
-                        "Wayland: Creating a buffer file for %d B failed: %m\n",
+                        "Wayland: Creating a buffer file for %d B failed: %m",
                         length);
         return GLFW_FALSE;
     }
@@ -598,7 +687,7 @@ int _glfwPlatformCreateCursor(_GLFWcursor* cursor,
     if (data == MAP_FAILED)
     {
         _glfwInputError(GLFW_PLATFORM_ERROR,
-                        "Wayland: Cursor mmap failed: %m\n");
+                        "Wayland: Cursor mmap failed: %m");
         close(fd);
         return GLFW_FALSE;
     }
@@ -837,13 +926,15 @@ void _glfwPlatformSetCursor(_GLFWwindow* window, _GLFWcursor* cursor)
 void _glfwPlatformSetClipboardString(_GLFWwindow* window, const char* string)
 {
     // TODO
-    fprintf(stderr, "_glfwPlatformSetClipboardString not implemented yet\n");
+    _glfwInputError(GLFW_PLATFORM_ERROR,
+                    "Wayland: Clipboard setting not implemented yet");
 }
 
 const char* _glfwPlatformGetClipboardString(_GLFWwindow* window)
 {
     // TODO
-    fprintf(stderr, "_glfwPlatformGetClipboardString not implemented yet\n");
+    _glfwInputError(GLFW_PLATFORM_ERROR,
+                    "Wayland: Clipboard getting not implemented yet");
     return NULL;
 }
 

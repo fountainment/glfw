@@ -83,6 +83,7 @@ typedef struct _GLFWwindowWayland
 {
     int                         width, height;
     GLFWbool                    visible;
+    GLFWbool                    maximized;
     struct wl_surface*          surface;
     struct wl_egl_window*       native;
     struct wl_shell_surface*    shell_surface;
@@ -90,6 +91,8 @@ typedef struct _GLFWwindowWayland
 
     _GLFWcursor*                currentCursor;
     double                      cursorPosX, cursorPosY;
+
+    char*                       title;
 
     // We need to track the monitors the window spans on to calculate the
     // optimal scaling factor.
