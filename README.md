@@ -93,12 +93,14 @@ does not find Doxygen, the documentation will not be generated.
  - Added `GLFW_NO_API` for creating window without contexts
  - Added `GLFW_CONTEXT_NO_ERROR` context hint for `GL_KHR_no_error` support
  - Added `GLFW_INCLUDE_VULKAN` for including the Vulkan header
+ - Added `GLFW_CONTEXT_CREATION_API`, `GLFW_NATIVE_CONTEXT_API` and
+   `GLFW_EGL_CONTEXT_API` for run-time context creation API selection
  - Added `GLFW_TRUE` and `GLFW_FALSE` as client API independent boolean values
  - Added icons to examples on Windows and OS X
  - Relaxed rules for native access header macros
  - Removed dependency on external OpenGL or OpenGL ES headers
- - Removed `_GLFW_USE_OPENGL`, `_GLFW_USE_GLESV1` and `_GLFW_USE_GLESV2`
-   configuration macros
+ - Removed `_GLFW_USE_OPENGL`, `_GLFW_USE_GLESV1`, `_GLFW_USE_GLESV2`,
+   `_GLFW_WGL`, `_GLFW_NSGL`, `_GLFW_GLX` and `_GLFW_EGL` configuration macros
  - [Win32] Added support for Windows 8.1 per-monitor DPI
  - [Win32] Replaced winmm with XInput and DirectInput for joystick input
  - [Win32] Bugfix: Window creation would segfault if video mode setting required
@@ -110,6 +112,8 @@ does not find Doxygen, the documentation will not be generated.
                    trigger monitor callback
  - [Win32] Bugfix: No monitors were listed on headless and VMware guest systems
  - [Win32] Bugfix: Pressing Ctrl+Pause would report `GLFW_KEY_UNKNOWN`
+ - [Win32] Bugfix: Window size events would be reported in wrong order when
+                   restoring a full screen window
  - [Cocoa] Made joystick polling more efficient
  - [Cocoa] Removed support for OS X 10.6
  - [Cocoa] Bugfix: Full screen windows on secondary monitors were mispositioned

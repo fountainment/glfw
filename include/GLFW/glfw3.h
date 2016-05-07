@@ -655,6 +655,7 @@ extern "C" {
 #define GLFW_OPENGL_PROFILE         0x00022008
 #define GLFW_CONTEXT_RELEASE_BEHAVIOR 0x00022009
 #define GLFW_CONTEXT_NO_ERROR       0x0002200A
+#define GLFW_CONTEXT_CREATION_API   0x0002200B
 
 #define GLFW_NO_API                          0
 #define GLFW_OPENGL_API             0x00030001
@@ -679,6 +680,9 @@ extern "C" {
 #define GLFW_ANY_RELEASE_BEHAVIOR            0
 #define GLFW_RELEASE_BEHAVIOR_FLUSH 0x00035001
 #define GLFW_RELEASE_BEHAVIOR_NONE  0x00035002
+
+#define GLFW_NATIVE_CONTEXT_API     0x00036001
+#define GLFW_EGL_CONTEXT_API        0x00036002
 
 /*! @defgroup shapes Standard cursor shapes
  *
@@ -2056,6 +2060,9 @@ GLFWAPI void glfwGetWindowSize(GLFWwindow* window, int* width, int* height);
  *  The size limits are applied immediately to a windowed mode window and may
  *  cause it to be resized.
  *
+ *  The maximum dimensions must be greater than or equal to the minimum
+ *  dimensions and all must be greater than or equal to zero.
+ *
  *  @param[in] window The window to set limits for.
  *  @param[in] minwidth The minimum width, in screen coordinates, of the client
  *  area, or `GLFW_DONT_CARE`.
@@ -2066,8 +2073,8 @@ GLFWAPI void glfwGetWindowSize(GLFWwindow* window, int* width, int* height);
  *  @param[in] maxheight The maximum height, in screen coordinates, of the
  *  client area, or `GLFW_DONT_CARE`.
  *
- *  @errors Possible errors include @ref GLFW_NOT_INITIALIZED and @ref
- *  GLFW_PLATFORM_ERROR.
+ *  @errors Possible errors include @ref GLFW_NOT_INITIALIZED, @ref
+ *  GLFW_INVALID_VALUE and @ref GLFW_PLATFORM_ERROR.
  *
  *  @remark If you set size limits and an aspect ratio that conflict, the
  *  results are undefined.

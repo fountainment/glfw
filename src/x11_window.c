@@ -57,16 +57,16 @@ void selectDisplayConnection(struct timeval* timeout)
     int result, count;
     const int fd = ConnectionNumber(_glfw.x11.display);
 
+    count = fd + 1;
+
     FD_ZERO(&fds);
     FD_SET(fd, &fds);
 #if defined(__linux__)
     FD_SET(_glfw.linux_js.inotify, &fds);
-#endif
 
-    if (fd > _glfw.linux_js.inotify)
-        count = fd + 1;
-    else
+    if (fd < _glfw.linux_js.inotify)
         count = _glfw.linux_js.inotify + 1;
+#endif
 
     // NOTE: We use select instead of an X function like XNextEvent, as the
     //       wait inside those are guarded by the mutex protecting the display
@@ -209,7 +209,7 @@ static void sendEventToWM(_GLFWwindow* window, Atom type,
 
 // Updates the normal hints according to the window settings
 //
-static void updateNormalHints(_GLFWwindow* window)
+static void updateNormalHints(_GLFWwindow* window, int width, int height)
 {
     XSizeHints* hints = XAllocSizeHints();
 
@@ -239,9 +239,6 @@ static void updateNormalHints(_GLFWwindow* window)
         }
         else
         {
-            int width, height;
-            _glfwPlatformGetWindowSize(window, &width, &height);
-
             hints->flags |= (PMinSize | PMaxSize);
             hints->min_width  = hints->max_width  = width;
             hints->min_height = hints->max_height = height;
@@ -256,8 +253,6 @@ static void updateNormalHints(_GLFWwindow* window)
 //
 static void updateWindowMode(_GLFWwindow* window)
 {
-    updateNormalHints(window);
-
     if (window->monitor)
     {
         if (_glfw.x11.xinerama.available &&
@@ -300,7 +295,7 @@ static void updateWindowMode(_GLFWwindow* window)
             window->x11.overrideRedirect = GLFW_TRUE;
         }
 
-        if (_glfw.x11.NET_WM_BYPASS_COMPOSITOR)
+        // Enable compositor bypass
         {
             const unsigned long value = 1;
 
@@ -338,7 +333,7 @@ static void updateWindowMode(_GLFWwindow* window)
             window->x11.overrideRedirect = GLFW_FALSE;
         }
 
-        if (_glfw.x11.NET_WM_BYPASS_COMPOSITOR)
+        // Disable compositor bypass
         {
             XDeleteProperty(_glfw.x11.display, window->x11.handle,
                             _glfw.x11.NET_WM_BYPASS_COMPOSITOR);
@@ -469,59 +464,48 @@ static GLFWbool createWindow(_GLFWwindow* window,
                         sizeof(hints) / sizeof(long));
     }
 
-    if (wndconfig->floating)
+    if (_glfw.x11.NET_WM_STATE && !window->monitor)
     {
-        if (_glfw.x11.NET_WM_STATE && _glfw.x11.NET_WM_STATE_ABOVE)
+        Atom states[3];
+        int count = 0;
+
+        if (wndconfig->floating)
         {
-            Atom value = _glfw.x11.NET_WM_STATE_ABOVE;
-            XChangeProperty(_glfw.x11.display, window->x11.handle,
-                            _glfw.x11.NET_WM_STATE, XA_ATOM, 32,
-                            PropModeReplace, (unsigned char*) &value, 1);
+            if (_glfw.x11.NET_WM_STATE_ABOVE)
+                states[count++] = _glfw.x11.NET_WM_STATE_ABOVE;
         }
-    }
 
-    if (wndconfig->maximized && !window->monitor)
-    {
-        if (_glfw.x11.NET_WM_STATE &&
-            _glfw.x11.NET_WM_STATE_MAXIMIZED_VERT &&
-            _glfw.x11.NET_WM_STATE_MAXIMIZED_HORZ)
+        if (wndconfig->maximized)
         {
-            const Atom states[2] =
+            if (_glfw.x11.NET_WM_STATE_MAXIMIZED_VERT &&
+                _glfw.x11.NET_WM_STATE_MAXIMIZED_HORZ)
             {
-                _glfw.x11.NET_WM_STATE_MAXIMIZED_VERT,
-                _glfw.x11.NET_WM_STATE_MAXIMIZED_HORZ
-            };
+                states[count++] = _glfw.x11.NET_WM_STATE_MAXIMIZED_VERT;
+                states[count++] = _glfw.x11.NET_WM_STATE_MAXIMIZED_HORZ;
+            }
+        }
 
+        if (count)
+        {
             XChangeProperty(_glfw.x11.display, window->x11.handle,
                             _glfw.x11.NET_WM_STATE, XA_ATOM, 32,
-                            PropModeReplace, (unsigned char*) &states, 2);
+                            PropModeReplace, (unsigned char*) &states, count);
         }
     }
 
     // Declare the WM protocols supported by GLFW
     {
-        int count = 0;
-        Atom protocols[2];
-
-        // The WM_DELETE_WINDOW ICCCM protocol
-        // Basic window close notification protocol
-        if (_glfw.x11.WM_DELETE_WINDOW)
-            protocols[count++] = _glfw.x11.WM_DELETE_WINDOW;
-
-        // The _NET_WM_PING EWMH protocol
-        // Tells the WM to ping the GLFW window and flag the application as
-        // unresponsive if the WM doesn't get a reply within a few seconds
-        if (_glfw.x11.NET_WM_PING)
-            protocols[count++] = _glfw.x11.NET_WM_PING;
-
-        if (count > 0)
+        Atom protocols[] =
         {
-            XSetWMProtocols(_glfw.x11.display, window->x11.handle,
-                            protocols, count);
-        }
+            _glfw.x11.WM_DELETE_WINDOW,
+            _glfw.x11.NET_WM_PING
+        };
+
+        XSetWMProtocols(_glfw.x11.display, window->x11.handle,
+                        protocols, sizeof(protocols) / sizeof(Atom));
     }
 
-    if (_glfw.x11.NET_WM_PID)
+    // Declare our PID
     {
         const pid_t pid = getpid();
 
@@ -556,7 +540,7 @@ static GLFWbool createWindow(_GLFWwindow* window,
         XFree(hints);
     }
 
-    updateNormalHints(window);
+    updateNormalHints(window, wndconfig->width, wndconfig->height);
 
     // Set ICCCM WM_CLASS property
     // HACK: Until a mechanism for specifying the application name is added, the
@@ -1494,34 +1478,40 @@ int _glfwPlatformCreateWindow(_GLFWwindow* window,
     Visual* visual;
     int depth;
 
-    if (ctxconfig->api == GLFW_NO_API)
+    if (ctxconfig->client == GLFW_NO_API)
     {
         visual = DefaultVisual(_glfw.x11.display, _glfw.x11.screen);
         depth = DefaultDepth(_glfw.x11.display, _glfw.x11.screen);
     }
     else
     {
-#if defined(_GLFW_GLX)
-        if (!_glfwChooseVisualGLX(ctxconfig, fbconfig, &visual, &depth))
-            return GLFW_FALSE;
-#elif defined(_GLFW_EGL)
-        if (!_glfwChooseVisualEGL(ctxconfig, fbconfig, &visual, &depth))
-            return GLFW_FALSE;
-#endif
+        if (ctxconfig->source == GLFW_NATIVE_CONTEXT_API)
+        {
+            if (!_glfwChooseVisualGLX(ctxconfig, fbconfig, &visual, &depth))
+                return GLFW_FALSE;
+        }
+        else
+        {
+            if (!_glfwChooseVisualEGL(ctxconfig, fbconfig, &visual, &depth))
+                return GLFW_FALSE;
+        }
     }
 
     if (!createWindow(window, wndconfig, visual, depth))
         return GLFW_FALSE;
 
-    if (ctxconfig->api != GLFW_NO_API)
+    if (ctxconfig->client != GLFW_NO_API)
     {
-#if defined(_GLFW_GLX)
-        if (!_glfwCreateContextGLX(window, ctxconfig, fbconfig))
-            return GLFW_FALSE;
-#elif defined(_GLFW_EGL)
-        if (!_glfwCreateContextEGL(window, ctxconfig, fbconfig))
-            return GLFW_FALSE;
-#endif
+        if (ctxconfig->source == GLFW_NATIVE_CONTEXT_API)
+        {
+            if (!_glfwCreateContextGLX(window, ctxconfig, fbconfig))
+                return GLFW_FALSE;
+        }
+        else
+        {
+            if (!_glfwCreateContextEGL(window, ctxconfig, fbconfig))
+                return GLFW_FALSE;
+        }
     }
 
     if (window->monitor)
@@ -1546,14 +1536,8 @@ void _glfwPlatformDestroyWindow(_GLFWwindow* window)
         window->x11.ic = NULL;
     }
 
-    if (window->context.api != GLFW_NO_API)
-    {
-#if defined(_GLFW_GLX)
-        _glfwDestroyContextGLX(window);
-#elif defined(_GLFW_EGL)
-        _glfwDestroyContextEGL(window);
-#endif
-    }
+    if (window->context.client != GLFW_NO_API)
+        window->context.destroyContext(window);
 
     if (window->x11.handle)
     {
@@ -1596,21 +1580,15 @@ void _glfwPlatformSetWindowTitle(_GLFWwindow* window, const char* title)
                        NULL, NULL, NULL);
 #endif
 
-    if (_glfw.x11.NET_WM_NAME)
-    {
-        XChangeProperty(_glfw.x11.display,  window->x11.handle,
-                        _glfw.x11.NET_WM_NAME, _glfw.x11.UTF8_STRING, 8,
-                        PropModeReplace,
-                        (unsigned char*) title, strlen(title));
-    }
+    XChangeProperty(_glfw.x11.display,  window->x11.handle,
+                    _glfw.x11.NET_WM_NAME, _glfw.x11.UTF8_STRING, 8,
+                    PropModeReplace,
+                    (unsigned char*) title, strlen(title));
 
-    if (_glfw.x11.NET_WM_ICON_NAME)
-    {
-        XChangeProperty(_glfw.x11.display,  window->x11.handle,
-                        _glfw.x11.NET_WM_ICON_NAME, _glfw.x11.UTF8_STRING, 8,
-                        PropModeReplace,
-                        (unsigned char*) title, strlen(title));
-    }
+    XChangeProperty(_glfw.x11.display,  window->x11.handle,
+                    _glfw.x11.NET_WM_ICON_NAME, _glfw.x11.UTF8_STRING, 8,
+                    PropModeReplace,
+                    (unsigned char*) title, strlen(title));
 
     XFlush(_glfw.x11.display);
 }
@@ -1729,7 +1707,7 @@ void _glfwPlatformSetWindowSize(_GLFWwindow* window, int width, int height)
     else
     {
         if (!window->resizable)
-            updateNormalHints(window);
+            updateNormalHints(window, width, height);
 
         XResizeWindow(_glfw.x11.display, window->x11.handle, width, height);
     }
@@ -1741,13 +1719,17 @@ void _glfwPlatformSetWindowSizeLimits(_GLFWwindow* window,
                                       int minwidth, int minheight,
                                       int maxwidth, int maxheight)
 {
-    updateNormalHints(window);
+    int width, height;
+    _glfwPlatformGetWindowSize(window, &width, &height);
+    updateNormalHints(window, width, height);
     XFlush(_glfw.x11.display);
 }
 
 void _glfwPlatformSetWindowAspectRatio(_GLFWwindow* window, int numer, int denom)
 {
-    updateNormalHints(window);
+    int width, height;
+    _glfwPlatformGetWindowSize(window, &width, &height);
+    updateNormalHints(window, width, height);
     XFlush(_glfw.x11.display);
 }
 
@@ -1943,6 +1925,7 @@ void _glfwPlatformSetWindowMonitor(_GLFWwindow* window,
         releaseMonitor(window);
 
     _glfwInputWindowMonitorChange(window, monitor);
+    updateNormalHints(window, width, height);
     updateWindowMode(window);
 
     if (window->monitor)
