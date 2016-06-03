@@ -2,7 +2,7 @@
 // GLFW 3.2 Win32 - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2002-2006 Marcus Geelnard
-// Copyright (c) 2006-2010 Camilla Berglund <elmindreda@elmindreda.org>
+// Copyright (c) 2006-2016 Camilla Berglund <elmindreda@glfw.org>
 //
 // This software is provided 'as-is', without any express or implied
 // warranty. In no event will the authors be held liable for any damages
@@ -237,7 +237,7 @@ typedef struct _GLFWwindowWin32
     GLFWbool            iconified;
 
     // The last received cursor position, regardless of source
-    int                 cursorPosX, cursorPosY;
+    int                 lastCursorPosX, lastCursorPosY;
 
 } _GLFWwindowWin32;
 
@@ -246,12 +246,16 @@ typedef struct _GLFWwindowWin32
 //
 typedef struct _GLFWlibraryWin32
 {
-    HWND                helperWindow;
+    HWND                helperWindowHandle;
     DWORD               foregroundLockTimeout;
     char*               clipboardString;
     char                keyName[64];
     short int           publicKeys[512];
     short int           nativeKeys[GLFW_KEY_LAST + 1];
+    // Where to place the cursor when re-enabled
+    double              restoreCursorPosX, restoreCursorPosY;
+    // The window whose disabled cursor mode is active
+    _GLFWwindow*        disabledCursorWindow;
 
     struct {
         HINSTANCE       instance;

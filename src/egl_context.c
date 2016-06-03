@@ -2,7 +2,7 @@
 // GLFW 3.2 EGL - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2002-2006 Marcus Geelnard
-// Copyright (c) 2006-2010 Camilla Berglund <elmindreda@elmindreda.org>
+// Copyright (c) 2006-2016 Camilla Berglund <elmindreda@glfw.org>
 //
 // This software is provided 'as-is', without any express or implied
 // warranty. In no event will the authors be held liable for any damages
@@ -613,12 +613,12 @@ GLFWbool _glfwCreateContextEGL(_GLFWwindow* window,
         }
     }
 
-    window->context.makeContextCurrent = makeContextCurrent;
+    window->context.makeCurrent = makeContextCurrent;
     window->context.swapBuffers = swapBuffers;
     window->context.swapInterval = swapInterval;
     window->context.extensionSupported = extensionSupported;
     window->context.getProcAddress = getProcAddress;
-    window->context.destroyContext = destroyContext;
+    window->context.destroy = destroyContext;
 
     return GLFW_TRUE;
 }

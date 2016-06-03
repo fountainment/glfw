@@ -201,15 +201,14 @@ static void handlePointerButton(_GLFWwindow* window,
 static void handlePointerMotion(_GLFWwindow* window,
                                 const MirPointerEvent* pointer_event)
 {
-    int current_x = window->cursorPosX;
-    int current_y = window->cursorPosY;
+    int current_x = window->virtualCursorPosX;
+    int current_y = window->virtualCursorPosY;
     int x  = mir_pointer_event_axis_value(pointer_event, mir_pointer_axis_x);
     int y  = mir_pointer_event_axis_value(pointer_event, mir_pointer_axis_y);
     int dx = mir_pointer_event_axis_value(pointer_event, mir_pointer_axis_hscroll);
     int dy = mir_pointer_event_axis_value(pointer_event, mir_pointer_axis_vscroll);
 
-    if (current_x != x || current_y != y)
-      _glfwInputCursorMotion(window, x, y);
+    _glfwInputCursorPos(window, x, y);
     if (dx != 0 || dy != 0)
       _glfwInputScroll(window, dx, dy);
 }
@@ -396,7 +395,7 @@ void _glfwPlatformDestroyWindow(_GLFWwindow* window)
     }
 
     if (window->context.client != GLFW_NO_API)
-        window->context.destroyContext(window);
+        window->context.destroy(window);
 }
 
 void _glfwPlatformSetWindowTitle(_GLFWwindow* window, const char* title)

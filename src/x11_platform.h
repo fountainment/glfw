@@ -2,7 +2,7 @@
 // GLFW 3.2 X11 - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2002-2006 Marcus Geelnard
-// Copyright (c) 2006-2010 Camilla Berglund <elmindreda@elmindreda.org>
+// Copyright (c) 2006-2016 Camilla Berglund <elmindreda@glfw.org>
 //
 // This software is provided 'as-is', without any express or implied
 // warranty. In no event will the authors be held liable for any damages
@@ -118,9 +118,9 @@ typedef struct _GLFWwindowX11
     int             xpos, ypos;
 
     // The last received cursor position, regardless of source
-    double          cursorPosX, cursorPosY;
+    int             lastCursorPosX, lastCursorPosY;
     // The last position the cursor was warped to by GLFW
-    int             warpPosX, warpPosY;
+    int             warpCursorPosX, warpCursorPosY;
 
     // The information from the last KeyPress event
     struct {
@@ -155,6 +155,10 @@ typedef struct _GLFWlibraryX11
     short int       publicKeys[256];
     // GLFW key to X11 keycode LUT
     short int       nativeKeys[GLFW_KEY_LAST + 1];
+    // Where to place the cursor when re-enabled
+    double          restoreCursorPosX, restoreCursorPosY;
+    // The window whose disabled cursor mode is active
+    _GLFWwindow*    disabledCursorWindow;
 
     // Window manager atoms
     Atom            WM_PROTOCOLS;

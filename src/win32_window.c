@@ -2,7 +2,7 @@
 // GLFW 3.2 Win32 - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2002-2006 Marcus Geelnard
-// Copyright (c) 2006-2010 Camilla Berglund <elmindreda@elmindreda.org>
+// Copyright (c) 2006-2016 Camilla Berglund <elmindreda@glfw.org>
 //
 // This software is provided 'as-is', without any express or implied
 // warranty. In no event will the authors be held liable for any damages
@@ -218,15 +218,64 @@ static void applyAspectRatio(_GLFWwindow* window, int edge, RECT* area)
     }
 }
 
+// Centers the cursor over the window client area
+//
+static void centerCursor(_GLFWwindow* window)
+{
+    int width, height;
+    _glfwPlatformGetWindowSize(window, &width, &height);
+    _glfwPlatformSetCursorPos(window, width / 2.0, height / 2.0);
+}
+
+// Returns whether the cursor is in the client area of the specified window
+//
+static GLFWbool cursorInClientArea(_GLFWwindow* window)
+{
+    RECT area;
+    POINT pos;
+
+    if (!GetCursorPos(&pos))
+        return GLFW_FALSE;
+
+    if (WindowFromPoint(pos) != window->win32.handle)
+        return GLFW_FALSE;
+
+    GetClientRect(window->win32.handle, &area);
+    ClientToScreen(window->win32.handle, (POINT*) &area.left);
+    ClientToScreen(window->win32.handle, (POINT*) &area.right);
+
+    return PtInRect(&area, pos);
+}
+
+// Updates the cursor image according to its cursor mode
+//
+static void updateCursorImage(_GLFWwindow* window)
+{
+    if (window->cursorMode == GLFW_CURSOR_NORMAL)
+    {
+        if (window->cursor)
+            SetCursor(window->cursor->win32.handle);
+        else
+            SetCursor(LoadCursorW(NULL, IDC_ARROW));
+    }
+    else
+        SetCursor(NULL);
+}
+
 // Updates the cursor clip rect
 //
 static void updateClipRect(_GLFWwindow* window)
 {
-    RECT clipRect;
-    GetClientRect(window->win32.handle, &clipRect);
-    ClientToScreen(window->win32.handle, (POINT*) &clipRect.left);
-    ClientToScreen(window->win32.handle, (POINT*) &clipRect.right);
-    ClipCursor(&clipRect);
+    if (window)
+    {
+        RECT clipRect;
+        GetClientRect(window->win32.handle, &clipRect);
+        ClientToScreen(window->win32.handle, (POINT*) &clipRect.left);
+        ClientToScreen(window->win32.handle, (POINT*) &clipRect.right);
+        ClipCursor(&clipRect);
+    }
+    else
+        ClipCursor(NULL);
 }
 
 // Translates a GLFW standard cursor to a resource ID
@@ -329,6 +378,13 @@ static int translateKey(WPARAM wParam, LPARAM lParam)
         return GLFW_KEY_LEFT_CONTROL;
     }
 
+    if (wParam == VK_PROCESSKEY)
+    {
+        // IME notifies that keys have been filtered by setting the virtual
+        // key-code to VK_PROCESSKEY
+        return _GLFW_KEY_INVALID;
+    }
+
     return _glfw.win32.publicKeys[HIWORD(lParam) & 0x1FF];
 }
 
@@ -369,7 +425,7 @@ static void releaseMonitor(_GLFWwindow* window)
 static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
                                    WPARAM wParam, LPARAM lParam)
 {
-    _GLFWwindow* window = (_GLFWwindow*) GetPropW(hWnd, L"GLFW");
+    _GLFWwindow* window = GetPropW(hWnd, L"GLFW");
     if (!window)
     {
         // This is the message handling for the hidden helper window
@@ -413,10 +469,11 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
     {
         case WM_SETFOCUS:
         {
+            _glfwInputWindowFocus(window, GLFW_TRUE);
+
             if (window->cursorMode == GLFW_CURSOR_DISABLED)
                 _glfwPlatformSetCursorMode(window, GLFW_CURSOR_DISABLED);
 
-            _glfwInputWindowFocus(window, GLFW_TRUE);
             return 0;
         }
 
@@ -561,18 +618,21 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
 
             if (window->cursorMode == GLFW_CURSOR_DISABLED)
             {
-                if (_glfw.cursorWindow != window)
+                const int dx = x - window->win32.lastCursorPosX;
+                const int dy = y - window->win32.lastCursorPosY;
+
+                if (_glfw.win32.disabledCursorWindow != window)
                     break;
 
-                _glfwInputCursorMotion(window,
-                                       x - window->win32.cursorPosX,
-                                       y - window->win32.cursorPosY);
+                _glfwInputCursorPos(window,
+                                    window->virtualCursorPosX + dx,
+                                    window->virtualCursorPosY + dy);
             }
             else
-                _glfwInputCursorMotion(window, x, y);
+                _glfwInputCursorPos(window, x, y);
 
-            window->win32.cursorPosX = x;
-            window->win32.cursorPosY = y;
+            window->win32.lastCursorPosX = x;
+            window->win32.lastCursorPosY = y;
 
             if (!window->win32.cursorTracked)
             {
@@ -611,6 +671,24 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
             return 0;
         }
 
+        case WM_ENTERSIZEMOVE:
+        case WM_ENTERMENULOOP:
+        {
+            if (window->cursorMode == GLFW_CURSOR_DISABLED)
+                _glfwPlatformSetCursorMode(window, GLFW_CURSOR_NORMAL);
+
+            break;
+        }
+
+        case WM_EXITSIZEMOVE:
+        case WM_EXITMENULOOP:
+        {
+            if (window->cursorMode == GLFW_CURSOR_DISABLED)
+                _glfwPlatformSetCursorMode(window, GLFW_CURSOR_DISABLED);
+
+            break;
+        }
+
         case WM_SIZE:
         {
             const GLFWbool iconified =
@@ -619,11 +697,8 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
                 window->win32.iconified &&
                 (wParam == SIZE_RESTORED || wParam == SIZE_MAXIMIZED);
 
-            if (_glfw.cursorWindow == window)
-            {
-                if (window->cursorMode == GLFW_CURSOR_DISABLED)
-                    updateClipRect(window);
-            }
+            if (_glfw.win32.disabledCursorWindow == window)
+                updateClipRect(window);
 
             if (iconified)
                 _glfwInputWindowIconify(window, GLFW_TRUE);
@@ -651,11 +726,8 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
 
         case WM_MOVE:
         {
-            if (_glfw.cursorWindow == window)
-            {
-                if (window->cursorMode == GLFW_CURSOR_DISABLED)
-                    updateClipRect(window);
-            }
+            if (_glfw.win32.disabledCursorWindow == window)
+                updateClipRect(window);
 
             // NOTE: This cannot use LOWORD/HIWORD recommended by MSDN, as
             // those macros do not handle negative window positions correctly
@@ -718,19 +790,10 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
 
         case WM_SETCURSOR:
         {
-            if (_glfw.cursorWindow == window && LOWORD(lParam) == HTCLIENT)
+            if (LOWORD(lParam) == HTCLIENT)
             {
-                if (window->cursorMode == GLFW_CURSOR_HIDDEN ||
-                    window->cursorMode == GLFW_CURSOR_DISABLED)
-                {
-                    SetCursor(NULL);
-                    return TRUE;
-                }
-                else if (window->cursor)
-                {
-                    SetCursor(window->cursor->win32.handle);
-                    return TRUE;
-                }
+                updateCursorImage(window);
+                return TRUE;
             }
 
             break;
@@ -760,7 +823,7 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
 
             // Move the mouse to the position of the drop
             DragQueryPoint(drop, &pt);
-            _glfwInputCursorMotion(window, pt.x, pt.y);
+            _glfwInputCursorPos(window, pt.x, pt.y);
 
             for (i = 0;  i < count;  i++)
             {
@@ -869,6 +932,9 @@ static int createWindow(_GLFWwindow* window, const _GLFWwndconfig* wndconfig)
 //
 static void destroyWindow(_GLFWwindow* window)
 {
+    if (_glfw.win32.disabledCursorWindow == window)
+        _glfw.win32.disabledCursorWindow = NULL;
+
     if (window->win32.handle)
     {
         RemovePropW(window->win32.handle, L"GLFW");
@@ -973,11 +1039,11 @@ int _glfwPlatformCreateWindow(_GLFWwindow* window,
                 // First we clear the current context (the one we just created)
                 // This is usually done by glfwDestroyWindow, but as we're not doing
                 // full GLFW window destruction, it's duplicated here
-                window->context.makeContextCurrent(NULL);
+                window->context.makeCurrent(NULL);
 
                 // Next destroy the Win32 window and WGL context (without resetting
                 // or destroying the GLFW window object)
-                window->context.destroyContext(window);
+                window->context.destroy(window);
                 destroyWindow(window);
 
                 // ...and then create them again, this time with better APIs
@@ -1000,6 +1066,8 @@ int _glfwPlatformCreateWindow(_GLFWwindow* window,
         _glfwPlatformFocusWindow(window);
         if (!acquireMonitor(window))
             return GLFW_FALSE;
+
+        centerCursor(window);
     }
 
     return GLFW_TRUE;
@@ -1011,7 +1079,7 @@ void _glfwPlatformDestroyWindow(_GLFWwindow* window)
         releaseMonitor(window);
 
     if (window->context.client != GLFW_NO_API)
-        window->context.destroyContext(window);
+        window->context.destroy(window);
 
     destroyWindow(window);
 
@@ -1326,6 +1394,8 @@ int _glfwPlatformWindowMaximized(_GLFWwindow* window)
 void _glfwPlatformPollEvents(void)
 {
     MSG msg;
+    HWND handle;
+    _GLFWwindow* window;
 
     while (PeekMessageW(&msg, NULL, 0, 0, PM_REMOVE))
     {
@@ -1335,7 +1405,7 @@ void _glfwPlatformPollEvents(void)
             // While GLFW does not itself post WM_QUIT, other processes may post
             // it to this one, for example Task Manager
 
-            _GLFWwindow* window = _glfw.windowListHead;
+            window = _glfw.windowListHead;
             while (window)
             {
                 _glfwInputWindowCloseRequest(window);
@@ -1349,13 +1419,14 @@ void _glfwPlatformPollEvents(void)
         }
     }
 
-    if (_glfw.cursorWindow)
+    handle = GetActiveWindow();
+    if (handle)
     {
-        _GLFWwindow* window = _glfw.cursorWindow;
-
         // LSHIFT/RSHIFT fixup (keys tend to "stick" without this fix)
         // This is the only async event handling in GLFW, but it solves some
         // nasty problems
+        window = GetPropW(handle, L"GLFW");
+        if (window)
         {
             const int mods = getAsyncKeyMods();
 
@@ -1371,19 +1442,20 @@ void _glfwPlatformPollEvents(void)
             if (!rshiftDown && window->keys[GLFW_KEY_RIGHT_SHIFT] == 1)
                 _glfwInputKey(window, GLFW_KEY_RIGHT_SHIFT, 0, GLFW_RELEASE, mods);
         }
+    }
 
-        if (window->cursorMode == GLFW_CURSOR_DISABLED)
+    window = _glfw.win32.disabledCursorWindow;
+    if (window)
+    {
+        int width, height;
+        _glfwPlatformGetWindowSize(window, &width, &height);
+
+        // NOTE: Re-center the cursor only if it has moved since the last call,
+        //       to avoid breaking glfwWaitEvents with WM_MOUSEMOVE
+        if (window->win32.lastCursorPosX != width / 2 ||
+            window->win32.lastCursorPosY != height / 2)
         {
-            int width, height;
-            _glfwPlatformGetWindowSize(window, &width, &height);
-
-            // NOTE: Re-center the cursor only if it has moved since the last
-            //       call, to avoid breaking glfwWaitEvents with WM_MOUSEMOVE
-            if (window->win32.cursorPosX != width / 2 ||
-                window->win32.cursorPosY != height / 2)
-            {
-                _glfwPlatformSetCursorPos(window, width / 2, height / 2);
-            }
+            _glfwPlatformSetCursorPos(window, width / 2, height / 2);
         }
     }
 }
@@ -1428,8 +1500,8 @@ void _glfwPlatformSetCursorPos(_GLFWwindow* window, double xpos, double ypos)
     POINT pos = { (int) xpos, (int) ypos };
 
     // Store the new position so it can be recognized later
-    window->win32.cursorPosX = pos.x;
-    window->win32.cursorPosY = pos.y;
+    window->win32.lastCursorPosX = pos.x;
+    window->win32.lastCursorPosY = pos.y;
 
     ClientToScreen(window->win32.handle, &pos);
     SetCursorPos(pos.x, pos.y);
@@ -1437,28 +1509,26 @@ void _glfwPlatformSetCursorPos(_GLFWwindow* window, double xpos, double ypos)
 
 void _glfwPlatformSetCursorMode(_GLFWwindow* window, int mode)
 {
-    POINT pos;
-
     if (mode == GLFW_CURSOR_DISABLED)
-        updateClipRect(window);
-    else
-        ClipCursor(NULL);
-
-    if (!GetCursorPos(&pos))
-        return;
-
-    if (WindowFromPoint(pos) != window->win32.handle)
-        return;
-
-    if (mode == GLFW_CURSOR_NORMAL)
     {
-        if (window->cursor)
-            SetCursor(window->cursor->win32.handle);
-        else
-            SetCursor(LoadCursorW(NULL, IDC_ARROW));
+        _glfw.win32.disabledCursorWindow = window;
+        _glfwPlatformGetCursorPos(window,
+                                  &_glfw.win32.restoreCursorPosX,
+                                  &_glfw.win32.restoreCursorPosY);
+        centerCursor(window);
+        updateClipRect(window);
     }
-    else
-        SetCursor(NULL);
+    else if (_glfw.win32.disabledCursorWindow == window)
+    {
+        _glfw.win32.disabledCursorWindow = NULL;
+        updateClipRect(NULL);
+        _glfwPlatformSetCursorPos(window,
+                                  _glfw.win32.restoreCursorPosX,
+                                  _glfw.win32.restoreCursorPosY);
+    }
+
+    if (cursorInClientArea(window))
+        updateCursorImage(window);
 }
 
 const char* _glfwPlatformGetKeyName(int key, int scancode)
@@ -1518,32 +1588,8 @@ void _glfwPlatformDestroyCursor(_GLFWcursor* cursor)
 
 void _glfwPlatformSetCursor(_GLFWwindow* window, _GLFWcursor* cursor)
 {
-    RECT area;
-    POINT pos;
-
-    if (_glfw.cursorWindow != window)
-        return;
-
-    if (window->cursorMode != GLFW_CURSOR_NORMAL)
-        return;
-
-    if (!GetCursorPos(&pos))
-        return;
-
-    if (WindowFromPoint(pos) != window->win32.handle)
-        return;
-
-    GetClientRect(window->win32.handle, &area);
-    ClientToScreen(window->win32.handle, (POINT*) &area.left);
-    ClientToScreen(window->win32.handle, (POINT*) &area.right);
-
-    if (!PtInRect(&area, pos))
-        return;
-
-    if (cursor)
-        SetCursor(cursor->win32.handle);
-    else
-        SetCursor(LoadCursorW(NULL, IDC_ARROW));
+    if (cursorInClientArea(window))
+        updateCursorImage(window);
 }
 
 void _glfwPlatformSetClipboardString(_GLFWwindow* window, const char* string)
@@ -1575,7 +1621,7 @@ void _glfwPlatformSetClipboardString(_GLFWwindow* window, const char* string)
     memcpy(GlobalLock(stringHandle), wideString, wideSize);
     GlobalUnlock(stringHandle);
 
-    if (!OpenClipboard(_glfw.win32.helperWindow))
+    if (!OpenClipboard(_glfw.win32.helperWindowHandle))
     {
         GlobalFree(stringHandle);
         free(wideString);
@@ -1595,7 +1641,7 @@ const char* _glfwPlatformGetClipboardString(_GLFWwindow* window)
 {
     HANDLE stringHandle;
 
-    if (!OpenClipboard(_glfw.win32.helperWindow))
+    if (!OpenClipboard(_glfw.win32.helperWindowHandle))
     {
         _glfwInputError(GLFW_PLATFORM_ERROR, "Win32: Failed to open clipboard");
         return NULL;
