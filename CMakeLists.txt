@@ -12,7 +12,7 @@ endif()
 
 set(GLFW_VERSION_MAJOR "3")
 set(GLFW_VERSION_MINOR "2")
-set(GLFW_VERSION_PATCH "0")
+set(GLFW_VERSION_PATCH "1")
 set(GLFW_VERSION_EXTRA "")
 set(GLFW_VERSION "${GLFW_VERSION_MAJOR}.${GLFW_VERSION_MINOR}")
 set(GLFW_VERSION_FULL "${GLFW_VERSION}.${GLFW_VERSION_PATCH}${GLFW_VERSION_EXTRA}")
@@ -35,13 +35,11 @@ if (APPLE)
     option(GLFW_USE_CHDIR "Make glfwInit chdir to Contents/Resources" ON)
     option(GLFW_USE_MENUBAR "Populate the menu bar on first window creation" ON)
     option(GLFW_USE_RETINA "Use the full resolution of Retina displays" ON)
-else()
-    option(GLFW_USE_EGL "Use EGL for context creation" OFF)
 endif()
 
 if (UNIX AND NOT APPLE)
-    option(GLFW_USE_WAYLAND "Use Wayland for context creation (implies EGL as well)" OFF)
-    option(GLFW_USE_MIR     "Use Mir for context creation (implies EGL as well)" OFF)
+    option(GLFW_USE_WAYLAND "Use Wayland for window creation" OFF)
+    option(GLFW_USE_MIR     "Use Mir for window creation" OFF)
 endif()
 
 if (MSVC)
@@ -57,12 +55,6 @@ if (BUILD_SHARED_LIBS AND UNIX)
     set(GLFW_LIB_NAME glfw)
 else()
     set(GLFW_LIB_NAME glfw3)
-endif()
-
-if (GLFW_USE_WAYLAND)
-    set(GLFW_USE_EGL ON)
-elseif (GLFW_USE_MIR)
-    set(GLFW_USE_EGL ON)
 endif()
 
 set(CMAKE_MODULE_PATH "${GLFW_SOURCE_DIR}/CMake/modules")
@@ -98,6 +90,15 @@ if (MSVC)
 endif()
 
 if (MINGW)
+    # Workaround for legacy MinGW not providing XInput and DirectInput
+    include(CheckIncludeFile)
+
+    check_include_file(dinput.h DINPUT_H_FOUND)
+    check_include_file(xinput.h XINPUT_H_FOUND)
+    if (NOT DINPUT_H_FOUND OR NOT XINPUT_H_FOUND)
+        list(APPEND glfw_INCLUDE_DIRS "${GLFW_SOURCE_DIR}/deps/mingw")
+    endif()
+
     # Enable link-time exploit mitigation features enabled by default on MSVC
     include(CheckCCompilerFlag)
 
@@ -129,19 +130,9 @@ endif()
 if (WIN32)
     set(_GLFW_WIN32 1)
     message(STATUS "Using Win32 for window creation")
-
-    if (GLFW_USE_EGL)
-        set(_GLFW_EGL 1)
-        message(STATUS "Using EGL for context creation")
-    else()
-        set(_GLFW_WGL 1)
-        message(STATUS "Using WGL for context creation")
-    endif()
 elseif (APPLE)
     set(_GLFW_COCOA 1)
     message(STATUS "Using Cocoa for window creation")
-    set(_GLFW_NSGL 1)
-    message(STATUS "Using NSGL for context creation")
 elseif (UNIX)
     if (GLFW_USE_WAYLAND)
         set(_GLFW_WAYLAND 1)
@@ -152,14 +143,6 @@ elseif (UNIX)
     else()
         set(_GLFW_X11 1)
         message(STATUS "Using X11 for window creation")
-    endif()
-
-    if (GLFW_USE_EGL)
-        set(_GLFW_EGL 1)
-        message(STATUS "Using EGL for context creation")
-    else()
-        set(_GLFW_GLX 1)
-        message(STATUS "Using GLX for context creation")
     endif()
 else()
     message(FATAL_ERROR "No supported platform was detected")
@@ -306,7 +289,7 @@ endif()
 #--------------------------------------------------------------------
 # Use Cocoa for window creation and NSOpenGL for context creation
 #--------------------------------------------------------------------
-if (_GLFW_COCOA AND _GLFW_NSGL)
+if (_GLFW_COCOA)
 
     if (GLFW_USE_MENUBAR)
         set(_GLFW_USE_MENUBAR 1)
@@ -325,20 +308,17 @@ if (_GLFW_COCOA AND _GLFW_NSGL)
     find_library(IOKIT_FRAMEWORK IOKit)
     find_library(CORE_FOUNDATION_FRAMEWORK CoreFoundation)
     find_library(CORE_VIDEO_FRAMEWORK CoreVideo)
-    find_library(CARBON_FRAMEWORK Carbon)
     mark_as_advanced(COCOA_FRAMEWORK
                      IOKIT_FRAMEWORK
                      CORE_FOUNDATION_FRAMEWORK
-                     CORE_VIDEO_FRAMEWORK
-                     CARBON_FRAMEWORK)
+                     CORE_VIDEO_FRAMEWORK)
     list(APPEND glfw_LIBRARIES "${COCOA_FRAMEWORK}"
                                "${IOKIT_FRAMEWORK}"
                                "${CORE_FOUNDATION_FRAMEWORK}"
-                               "${CORE_VIDEO_FRAMEWORK}"
-                               "${CARBON_FRAMEWORK}")
+                               "${CORE_VIDEO_FRAMEWORK}")
 
     set(glfw_PKG_DEPS "")
-    set(glfw_PKG_LIBS "-framework Cocoa -framework IOKit -framework CoreFoundation -framework CoreVideo -framework Carbon")
+    set(glfw_PKG_LIBS "-framework Cocoa -framework IOKit -framework CoreFoundation -framework CoreVideo")
 endif()
 
 #--------------------------------------------------------------------
