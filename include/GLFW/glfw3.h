@@ -115,11 +115,14 @@ extern "C" {
  #define GLFW_CALLBACK_DEFINED
 #endif /* CALLBACK */
 
-/* Most Windows GLU headers need wchar_t.
- * The OS X OpenGL header blocks the definition of ptrdiff_t by glext.h.
+/* Include because most Windows GLU headers need wchar_t and
+ * the OS X OpenGL header blocks the definition of ptrdiff_t by glext.h.
  * Include it unconditionally to avoid surprising side-effects.
  */
 #include <stddef.h>
+
+/* Include because it is needed by Vulkan and related functions.
+ */
 #include <stdint.h>
 
 /* Include the chosen client API headers.
@@ -1182,6 +1185,7 @@ typedef struct GLFWgammaramp
 /*! @brief Image data.
  *
  *  @sa @ref cursor_custom
+ *  @sa @ref window_icon
  *
  *  @since Added in version 2.1.
  *  @glfw3 Removed format and bytes-per-pixel members.
@@ -2846,7 +2850,7 @@ GLFWAPI void glfwWaitEventsTimeout(double timeout);
 /*! @brief Posts an empty event to the event queue.
  *
  *  This function posts an empty event from the current thread to the event
- *  queue, causing @ref glfwWaitEvents to return.
+ *  queue, causing @ref glfwWaitEvents or @ref glfwWaitEventsTimeout to return.
  *
  *  If no windows exist, this function returns immediately.  For synchronization
  *  of threads in applications that do not create windows, use your threading
@@ -2859,6 +2863,7 @@ GLFWAPI void glfwWaitEventsTimeout(double timeout);
  *
  *  @sa @ref events
  *  @sa glfwWaitEvents
+ *  @sa glfwWaitEventsTimeout
  *
  *  @since Added in version 3.1.
  *

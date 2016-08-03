@@ -49,7 +49,9 @@
 #define Button7            7
 
 
-// Wait for data to arrive
+// Wait for data to arrive using select
+// This avoids blocking other threads via the per-display Xlib lock that also
+// covers GLX functions
 //
 void selectDisplayConnection(struct timeval* timeout)
 {
@@ -68,9 +70,6 @@ void selectDisplayConnection(struct timeval* timeout)
         count = _glfw.linux_js.inotify + 1;
 #endif
 
-    // NOTE: We use select instead of an X function like XNextEvent, as the
-    //       wait inside those are guarded by the mutex protecting the display
-    //       struct, locking out other threads from using X (including GLX)
     // NOTE: Only retry on EINTR if there is no timeout, as select is not
     //       required to update it for the time elapsed
     // TODO: Update timeout value manually
@@ -104,6 +103,15 @@ static int getWindowState(_GLFWwindow* window)
 }
 
 // Returns whether the event is a selection event
+//
+static Bool isSelectionEvent(Display* display, XEvent* event, XPointer pointer)
+{
+    return event->type == SelectionRequest ||
+           event->type == SelectionNotify ||
+           event->type == SelectionClear;
+}
+
+// Returns whether the event is a _NET_FRAME_EXTENTS event
 //
 static Bool isFrameExtentsEvent(Display* display, XEvent* event, XPointer pointer)
 {
@@ -218,14 +226,18 @@ static void updateNormalHints(_GLFWwindow* window, int width, int height)
         if (window->resizable)
         {
             if (window->minwidth != GLFW_DONT_CARE &&
-                window->minheight != GLFW_DONT_CARE &&
-                window->maxwidth != GLFW_DONT_CARE &&
+                window->minheight != GLFW_DONT_CARE)
+            {
+                hints->flags |= PMinSize;
+                hints->min_width = window->minwidth;
+                hints->min_height = window->minheight;
+            }
+
+            if (window->maxwidth != GLFW_DONT_CARE &&
                 window->maxheight != GLFW_DONT_CARE)
             {
-                hints->flags |= (PMinSize | PMaxSize);
-                hints->min_width  = window->minwidth;
-                hints->min_height = window->minheight;
-                hints->max_width  = window->maxwidth;
+                hints->flags |= PMaxSize;
+                hints->max_width = window->maxwidth;
                 hints->max_height = window->maxheight;
             }
 
@@ -416,9 +428,9 @@ static void updateCursorImage(_GLFWwindow* window)
 
 // Create the X11 window (and its colormap)
 //
-static GLFWbool createWindow(_GLFWwindow* window,
-                             const _GLFWwndconfig* wndconfig,
-                             Visual* visual, int depth)
+static GLFWbool createNativeWindow(_GLFWwindow* window,
+                                   const _GLFWwndconfig* wndconfig,
+                                   Visual* visual, int depth)
 {
     // Create a colormap based on the visual used by the current context
     window->x11.colormap = XCreateColormap(_glfw.x11.display,
@@ -606,15 +618,6 @@ static GLFWbool createWindow(_GLFWwindow* window,
     _glfwPlatformGetWindowSize(window, &window->x11.width, &window->x11.height);
 
     return GLFW_TRUE;
-}
-
-// Returns whether the event is a selection event
-//
-static Bool isSelectionEvent(Display* display, XEvent* event, XPointer pointer)
-{
-    return event->type == SelectionRequest ||
-           event->type == SelectionNotify ||
-           event->type == SelectionClear;
 }
 
 // Set the specified property to the selection converted to the requested target
@@ -1514,17 +1517,21 @@ int _glfwPlatformCreateWindow(_GLFWwindow* window,
     {
         if (ctxconfig->source == GLFW_NATIVE_CONTEXT_API)
         {
+            if (!_glfwInitGLX())
+                return GLFW_FALSE;
             if (!_glfwChooseVisualGLX(ctxconfig, fbconfig, &visual, &depth))
                 return GLFW_FALSE;
         }
         else
         {
+            if (!_glfwInitEGL())
+                return GLFW_FALSE;
             if (!_glfwChooseVisualEGL(ctxconfig, fbconfig, &visual, &depth))
                 return GLFW_FALSE;
         }
     }
 
-    if (!createWindow(window, wndconfig, visual, depth))
+    if (!createNativeWindow(window, wndconfig, visual, depth))
         return GLFW_FALSE;
 
     if (ctxconfig->client != GLFW_NO_API)
@@ -1796,9 +1803,8 @@ void _glfwPlatformGetWindowFrameSize(_GLFWwindow* window,
 
         base = _glfwPlatformGetTimerValue();
 
-        // HACK: Poll with timeout for the required reply instead of blocking
-        //       This is done because some window managers (at least Unity,
-        //       Fluxbox and Xfwm) failed to send the required reply
+        // HACK: Use a timeout because earlier versions of some window managers
+        //       (at least Unity, Fluxbox and Xfwm) failed to send the reply
         //       They have been fixed but broken versions are still in the wild
         //       If you are affected by this and your window manager is NOT
         //       listed above, PLEASE report it to their and our issue trackers
@@ -2254,8 +2260,6 @@ const char* _glfwPlatformGetClipboardString(_GLFWwindow* window)
                           _glfw.x11.GLFW_SELECTION,
                           window->x11.handle, CurrentTime);
 
-        // XCheckTypedEvent is used instead of XIfEvent in order not to lock
-        // other threads out from the display during the entire wait period
         while (!XCheckTypedEvent(_glfw.x11.display, SelectionNotify, &event))
             selectDisplayConnection(NULL);
 
