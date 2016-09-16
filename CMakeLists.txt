@@ -11,7 +11,7 @@ if (NOT CMAKE_VERSION VERSION_LESS "3.0")
 endif()
 
 set(GLFW_VERSION_MAJOR "3")
-set(GLFW_VERSION_MINOR "2")
+set(GLFW_VERSION_MINOR "3")
 set(GLFW_VERSION_PATCH "0")
 set(GLFW_VERSION_EXTRA "")
 set(GLFW_VERSION "${GLFW_VERSION_MAJOR}.${GLFW_VERSION_MINOR}")
@@ -21,10 +21,18 @@ set(LIB_SUFFIX "" CACHE STRING "Takes an empty string or 64. Directory where lib
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 option(BUILD_SHARED_LIBS "Build shared libraries" OFF)
+<<<<<<< HEAD
 option(GLFW_BUILD_EXAMPLES "Build the GLFW example programs" OFF)
 option(GLFW_BUILD_TESTS "Build the GLFW test programs" OFF)
 option(GLFW_BUILD_DOCS "Build the GLFW documentation" OFF)
 option(GLFW_INSTALL "Generate installation target" OFF)
+=======
+option(GLFW_BUILD_EXAMPLES "Build the GLFW example programs" ON)
+option(GLFW_BUILD_TESTS "Build the GLFW test programs" ON)
+option(GLFW_BUILD_DOCS "Build the GLFW documentation" ON)
+option(GLFW_INSTALL "Generate installation target" ON)
+option(GLFW_VULKAN_STATIC "Use the Vulkan loader statically linked into application" OFF)
+>>>>>>> 433db8f9f9e3ef7a1cc001d4888d92f8ed543630
 option(GLFW_DOCUMENT_INTERNALS "Include internals in documentation" OFF)
 
 if (WIN32)
@@ -57,7 +65,11 @@ else()
     set(GLFW_LIB_NAME glfw3)
 endif()
 
-set(CMAKE_MODULE_PATH "${GLFW_SOURCE_DIR}/CMake/modules")
+if (GLFW_VULKAN_STATIC)
+    set(_GLFW_VULKAN_STATIC 1)
+endif()
+
+list(APPEND CMAKE_MODULE_PATH "${GLFW_SOURCE_DIR}/CMake/modules")
 
 find_package(Threads REQUIRED)
 find_package(Vulkan)
@@ -146,6 +158,21 @@ elseif (UNIX)
     endif()
 else()
     message(FATAL_ERROR "No supported platform was detected")
+endif()
+
+#--------------------------------------------------------------------
+# Add Vulkan static library if requested
+#--------------------------------------------------------------------
+if (GLFW_VULKAN_STATIC)
+    if (VULKAN_FOUND AND VULKAN_STATIC_LIBRARY)
+        list(APPEND glfw_LIBRARIES ${VULKAN_STATIC_LIBRARY})
+    else()
+        if (BUILD_SHARED_LIBS OR GLFW_BUILD_EXAMPLES OR GLFW_BUILD_TESTS)
+            message(FATAL_ERROR "Vulkan loader static library not found")
+        else()
+            message(WARNING "Vulkan loader static library not found")
+        endif()
+    endif()
 endif()
 
 #--------------------------------------------------------------------
@@ -253,7 +280,7 @@ endif()
 #--------------------------------------------------------------------
 if (_GLFW_WAYLAND)
     find_package(ECM REQUIRED NO_MODULE)
-    set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${ECM_MODULE_PATH})
+    list(APPEND CMAKE_MODULE_PATH ${ECM_MODULE_PATH})
 
     find_package(Wayland REQUIRED)
     find_package(WaylandScanner REQUIRED)

@@ -1,5 +1,5 @@
 //========================================================================
-// GLFW 3.2 EGL - www.glfw.org
+// GLFW 3.3 EGL - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2002-2006 Marcus Geelnard
 // Copyright (c) 2006-2016 Camilla Berglund <elmindreda@glfw.org>
@@ -165,13 +165,13 @@ typedef struct _GLFWcontextEGL
 
 } _GLFWcontextEGL;
 
-
 // EGL-specific global data
 //
 typedef struct _GLFWlibraryEGL
 {
     EGLDisplay      display;
     EGLint          major, minor;
+    GLFWbool        prefix;
 
     GLFWbool        KHR_create_context;
     GLFWbool        KHR_create_context_no_error;

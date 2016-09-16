@@ -1,5 +1,5 @@
 //========================================================================
-// GLFW 3.2 Win32 - www.glfw.org
+// GLFW 3.3 Win32 - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2006-2016 Camilla Berglund <elmindreda@glfw.org>
 //
@@ -30,7 +30,7 @@
 #define _GLFW_PLATFORM_LIBRARY_JOYSTICK_STATE \
     _GLFWjoystickWin32 win32_js[GLFW_JOYSTICK_LAST + 1]
 
-// Spoo
+// Joystick element (axis, button or slider)
 //
 typedef struct _GLFWjoyobjectWin32
 {

@@ -1,5 +1,5 @@
 //========================================================================
-// GLFW 3.2 Wayland - www.glfw.org
+// GLFW 3.3 Wayland - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2014 Jonas Ådahl <jadahl@gmail.com>
 //
@@ -74,7 +74,6 @@ typedef VkBool32 (APIENTRY *PFN_vkGetPhysicalDeviceWaylandPresentationSupportKHR
 //
 typedef struct _GLFWvidmodeWayland _GLFWvidmodeWayland;
 
-
 // Wayland-specific per-window data
 //
 typedef struct _GLFWwindowWayland
@@ -105,7 +104,6 @@ typedef struct _GLFWwindowWayland
     } pointerLock;
 } _GLFWwindowWayland;
 
-
 // Wayland-specific global data
 //
 typedef struct _GLFWlibraryWayland
@@ -131,7 +129,8 @@ typedef struct _GLFWlibraryWayland
     int                         monitorsCount;
     int                         monitorsSize;
 
-    short int                   publicKeys[256];
+    short int                   keycodes[256];
+    short int                   scancodes[GLFW_KEY_LAST + 1];
 
     struct {
         struct xkb_context*     context;
@@ -149,7 +148,6 @@ typedef struct _GLFWlibraryWayland
 
 } _GLFWlibraryWayland;
 
-
 // Wayland-specific per-monitor data
 //
 typedef struct _GLFWmonitorWayland
@@ -165,7 +163,6 @@ typedef struct _GLFWmonitorWayland
     int                         y;
     int                         scale;
 } _GLFWmonitorWayland;
-
 
 // Wayland-specific per-cursor data
 //

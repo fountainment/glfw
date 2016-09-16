@@ -1,5 +1,5 @@
 //========================================================================
-// GLFW 3.2 - www.glfw.org
+// GLFW 3.3 - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2002-2006 Marcus Geelnard
 // Copyright (c) 2006-2016 Camilla Berglund <elmindreda@glfw.org>
@@ -256,6 +256,19 @@ GLFWAPI const char* glfwGetKeyName(int key, int scancode)
     return _glfwPlatformGetKeyName(key, scancode);
 }
 
+GLFWAPI int glfwGetKeyScancode(int key)
+{
+    _GLFW_REQUIRE_INIT_OR_RETURN(-1);
+
+    if (key < GLFW_KEY_SPACE || key > GLFW_KEY_LAST)
+    {
+        _glfwInputError(GLFW_INVALID_ENUM, "Invalid key %i", key);
+        return GLFW_RELEASE;
+    }
+
+    return _glfwPlatformGetKeyScancode(key);
+}
+
 GLFWAPI int glfwGetKey(GLFWwindow* handle, int key)
 {
     _GLFWwindow* window = (_GLFWwindow*) handle;
@@ -332,11 +345,11 @@ GLFWAPI void glfwSetCursorPos(GLFWwindow* handle, double xpos, double ypos)
 
     _GLFW_REQUIRE_INIT();
 
-    if (xpos != xpos || xpos < DBL_MIN || xpos > DBL_MAX ||
-        ypos != ypos || ypos < DBL_MIN || ypos > DBL_MAX)
+    if (xpos != xpos || xpos < -DBL_MAX || xpos > DBL_MAX ||
+        ypos != ypos || ypos < -DBL_MAX || ypos > DBL_MAX)
     {
         _glfwInputError(GLFW_INVALID_VALUE,
-                        "Invalid cursor position %fx%f",
+                        "Invalid cursor position %f %f",
                         xpos, ypos);
         return;
     }

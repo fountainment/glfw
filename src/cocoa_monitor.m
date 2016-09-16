@@ -1,5 +1,5 @@
 //========================================================================
-// GLFW 3.2 OS X - www.glfw.org
+// GLFW 3.3 OS X - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2002-2006 Marcus Geelnard
 // Copyright (c) 2006-2016 Camilla Berglund <elmindreda@glfw.org>
@@ -28,10 +28,8 @@
 #include "internal.h"
 
 #include <stdlib.h>
-#include <stdlib.h>
 #include <limits.h>
 
-#include <IOKit/graphics/IOGraphicsLib.h>
 #include <IOKit/graphics/IOGraphicsLib.h>
 #include <CoreVideo/CVBase.h>
 #include <CoreVideo/CVDisplayLink.h>
@@ -66,7 +64,7 @@ static char* getDisplayName(CGDirectDisplayID displayID)
 
     size = CFStringGetMaximumSizeForEncoding(CFStringGetLength(value),
                                              kCFStringEncodingUTF8);
-    name = calloc(size + 1, sizeof(char));
+    name = calloc(size + 1, 1);
     CFStringGetCString(value, name, size, kCFStringEncodingUTF8);
 
     CFRelease(info);

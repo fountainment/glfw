@@ -1,5 +1,5 @@
 //========================================================================
-// GLFW 3.2 OS X - www.glfw.org
+// GLFW 3.3 OS X - www.glfw.org
 //------------------------------------------------------------------------
 // Copyright (c) 2009-2016 Camilla Berglund <elmindreda@glfw.org>
 //
@@ -82,7 +82,6 @@ typedef struct _GLFWwindowNS
 
 } _GLFWwindowNS;
 
-
 // Cocoa-specific global data
 //
 typedef struct _GLFWlibraryNS
@@ -92,12 +91,13 @@ typedef struct _GLFWlibraryNS
     id                  autoreleasePool;
     id                  cursor;
     TISInputSourceRef   inputSource;
+    IOHIDManagerRef     hidManager;
     id                  unicodeData;
     id                  listener;
 
     char                keyName[64];
-    short int           publicKeys[256];
-    short int           nativeKeys[GLFW_KEY_LAST + 1];
+    short int           keycodes[256];
+    short int           scancodes[GLFW_KEY_LAST + 1];
     char*               clipboardString;
     // Where to place the cursor when re-enabled
     double              restoreCursorPosX, restoreCursorPosY;
@@ -115,7 +115,6 @@ typedef struct _GLFWlibraryNS
 
 } _GLFWlibraryNS;
 
-
 // Cocoa-specific per-monitor data
 //
 typedef struct _GLFWmonitorNS
@@ -126,7 +125,6 @@ typedef struct _GLFWmonitorNS
 
 } _GLFWmonitorNS;
 
-
 // Cocoa-specific per-cursor data
 //
 typedef struct _GLFWcursorNS
@@ -134,7 +132,6 @@ typedef struct _GLFWcursorNS
     id              object;
 
 } _GLFWcursorNS;
-
 
 // Cocoa-specific global timer data
 //
